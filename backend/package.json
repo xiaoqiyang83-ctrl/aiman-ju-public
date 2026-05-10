@@ -1,0 +1,27 @@
+{
+  "name": "aimanju-backend",
+  "version": "3.4.0",
+  "description": "AIManju Backend - 漫剧分镜工具",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "dev": "nodemon app.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "bullmq": "^5.76.5",
+    "cors": "^2.8.6",
+    "dotenv": "^16.6.1",
+    "express": "^4.22.1",
+    "iconv-lite": "^0.7.2",
+    "ioredis": "^5.10.1",
+    "jsonwebtoken": "^9.0.3",
+    "mammoth": "^1.12.0",
+    "multer": "^1.4.5-lts.1",
+    "pg": "^8.20.0",
+    "ws": "^8.20.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  }
+}

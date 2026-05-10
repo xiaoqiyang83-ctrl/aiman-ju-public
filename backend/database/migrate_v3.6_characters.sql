@@ -1,0 +1,11 @@
+-- 角色表升级 v3.6
+-- 为 characters 表添加角色小传相关字段（视觉相关）
+
+ALTER TABLE characters ADD COLUMN IF NOT EXISTS gender VARCHAR(10);
+ALTER TABLE characters ADD COLUMN IF NOT EXISTS age VARCHAR(20);
+ALTER TABLE characters ADD COLUMN IF NOT EXISTS occupation VARCHAR(100);
+ALTER TABLE characters ADD COLUMN IF NOT EXISTS appearance TEXT;
+ALTER TABLE characters ADD COLUMN IF NOT EXISTS costume TEXT;
+ALTER TABLE characters ADD COLUMN IF NOT EXISTS personality TEXT;
+ALTER TABLE characters ADD COLUMN IF NOT EXISTS image_url VARCHAR(500);
+ALTER TABLE characters ADD COLUMN IF NOT EXISTS image_prompt TEXT;

@@ -1,0 +1,131 @@
+====================================================
+AIManju v3.0 完整部署包 - 部署说明
+====================================================
+
+【重要】这是一个全新的完整版本，和之前的代码完全独立。
+如果你的旧代码还有用，请先备份。
+
+
+====================================================
+第一步：初始化数据库
+====================================================
+
+1. 打开 PostgreSQL 的 SQL Shell (psql)
+2. 连接到 aimanju 数据库：
+   \c aimanju
+
+3. 粘贴 backend/database/init.sql 的全部内容执行
+
+4. 验证表创建成功：
+   SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';
+   应该看到5张表：users, projects, scripts, characters, scenes
+
+5. 验证默认用户：
+   SELECT id, username FROM users;
+   应该看到 admin 用户
+
+
+====================================================
+第二步：启动后端
+====================================================
+
+1. 打开 CMD，进入 backend 目录：
+   cd 你的路径\AIManju_v3\backend
+
+2. 安装依赖（仅第一次需要）：
+   npm install
+
+3. 修改 .env 文件中的数据库密码（如果不是 postgres）：
+   用记事本打开 backend/.env，修改 DB_PASSWORD
+
+4. 启动后端：
+   npm start
+
+5. 看到以下日志说明成功：
+   ✅ 数据库连接成功
+   ✅ 路由已加载: /api/auth
+   ✅ 路由已加载: /api/projects
+   ✅ 路由已加载: /api/scripts
+   ✅ 路由已加载: /api/characters
+   🚀 服务器运行在 http://localhost:3001
+
+6. 测试：浏览器访问 http://localhost:3001/api/health
+   应该返回：{"success":true,"message":"服务正常",...}
+
+
+====================================================
+第三步：启动前端
+====================================================
+
+1. 打开另一个 CMD，进入 frontend 目录：
+   cd 你的路径\AIManju_v3\frontend
+
+2. 安装依赖（仅第一次需要）：
+   npm install
+
+3. 启动前端：
+   npm run dev
+
+4. 看到日志说明成功：
+   Local: http://localhost:5173/
+
+
+====================================================
+第四步：功能测试（请开隐身窗口！）
+====================================================
+
+1. 打开浏览器隐身窗口（Ctrl+Shift+N）
+2. 访问 http://localhost:5173
+3. 登录：用户名 admin，密码 admin123
+4. 创建一个项目
+5. 点击进入项目，上传一个Word剧本
+6. 查看剧本列表（确认标题无乱码）
+7. 点击剧本，查看角色管理页面
+
+
+====================================================
+v3.0 和之前版本的核心区别
+====================================================
+
+1. 表结构极简化：users 表只保留 username/password，去掉 email/avatar
+2. 外键全部 NOT NULL：project_id/script_id 不再允许为空
+   → 从根本上解决"查不到数据"的问题
+3. 前端4个页面：Login → Workspace → Scripts → Characters
+   → 不再有多余页面，流程清晰
+4. Store 完整实现：28个方法全部导出，不再有 "xxx is not a function"
+5. 乱码三重防护：内容第一行取标题 > GBK解码文件名 > 兜底命名
+6. 上传必须带 project_id：不再有"不属于任何项目的剧本"
+
+
+====================================================
+文件清单
+====================================================
+
+backend/
+├── app.js                          # 后端入口
+├── package.json                    # 依赖清单
+├── .env                            # 环境配置
+├── database/
+│   └── init.sql                    # 数据库初始化脚本
+└── routes/
+    ├── auth.js                     # 登录注册
+    ├── projects.js                 # 项目管理
+    ├── scripts.js                  # 剧本上传管理
+    └── characters.js               # 角色管理
+
+frontend/
+├── index.html                      # HTML入口
+├── package.json                    # 依赖清单
+├── vite.config.js                  # Vite配置
+└── src/
+    ├── main.js                     # Vue入口
+    ├── App.vue                     # 根组件
+    ├── router/
+    │   └── index.js                # 路由配置
+    ├── stores/
+    │   └── user.js                 # Pinia Store（完整28方法）
+    └── views/
+        ├── Login.vue               # 登录页
+        ├── Workspace.vue           # 项目列表
+        ├── Scripts.vue             # 剧本列表
+        └── Characters.vue          # 角色管理

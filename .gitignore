@@ -1,0 +1,11 @@
+**/node_modules/
+**/.vite/
+**/dist/
+
+uploads/
+backend/uploads/
+
+*.log
+
+.env
+backend/.env
