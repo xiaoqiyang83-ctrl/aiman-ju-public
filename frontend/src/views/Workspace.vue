@@ -4627,6 +4627,7 @@ const handleMoveShot = async (scene, shot, direction) => {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   padding: 12px 8px;
   background: #f5f7fa;
@@ -4634,6 +4635,8 @@ const handleMoveShot = async (scene, shot, direction) => {
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s;
+  min-height: 80px;
+  overflow: hidden;
 }
 
 .op-btn:hover {
@@ -4650,6 +4653,7 @@ const handleMoveShot = async (scene, shot, direction) => {
   justify-content: center;
   font-size: 18px;
   color: #409eff;
+  background: #f0f2f5;
 }
 
 /* 确保 el-icon 组件样式正确穿透 */
