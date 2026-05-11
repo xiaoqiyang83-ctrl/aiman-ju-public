@@ -461,10 +461,20 @@ const generateTextWithProvider = async (provider, { system, user, temperature = 
 function extractFirstJsonObject(text) {
     const t = String(text || '');
     const fenced = t.match(/```json\s*([\s\S]*?)\s*```/i) || t.match(/```\s*([\s\S]*?)\s*```/);
-    const candidate = fenced ? fenced[1] : t;
+    let candidate = fenced ? fenced[1] : t;
     const start = candidate.indexOf('{');
     const end = candidate.lastIndexOf('}');
-    if (start >= 0 && end > start) return candidate.slice(start, end + 1);
+    if (start >= 0 && end > start) {
+        candidate = candidate.slice(start, end + 1);
+        // 清理JSON字符串中的非法控制字符（裸换行/制表符等，保留合法转义的 \n \t \r \" \\）
+        candidate = candidate.replace(/[\x00-\x1f]/g, (ch) => {
+            if (ch === '\n') return '\\n';
+            if (ch === '\r') return '\\r';
+            if (ch === '\t') return '\\t';
+            return '';
+        });
+        return candidate;
+    }
     return '';
 }
 
@@ -830,13 +840,25 @@ async function generateStoryboardFromScript({ title, content }) {
         throw e;
     }
 
-    const jsonText = extractFirstJsonObject(result.content);
+    let jsonText = extractFirstJsonObject(result.content);
     if (!jsonText) throw new Error('AI返回内容无法解析为JSON');
+
+    // 二次清理：确保没有残留的控制字符
+    jsonText = jsonText.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, '');
+
     let parsed;
     try {
         parsed = JSON.parse(jsonText);
     } catch (e) {
-        throw new Error('AI返回JSON解析失败: ' + e.message);
+        // 最后一次尝试：暴力清理所有控制字符（包括换行符）
+        try {
+            const cleaned = jsonText.replace(/[\x00-\x1f]/g, ' ');
+            parsed = JSON.parse(cleaned);
+            console.log('[AI Service] JSON解析通过（二次清理后）');
+        } catch (e2) {
+            console.error('[AI Service] JSON原始内容前200字符:', jsonText.slice(0, 200));
+            throw new Error('AI返回JSON解析失败: ' + e.message);
+        }
     }
 
     const normalized = normalizeStoryboardJson(parsed);
