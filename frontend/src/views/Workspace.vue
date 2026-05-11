@@ -355,6 +355,15 @@
                   <el-icon><Select /></el-icon>
                   批量选择
                 </el-button>
+                <el-button type="success" :loading="batchGenerating" :disabled="batchGenerating" @click="handleBatchGenerateImages">
+                  <el-icon><Picture /></el-icon>
+                  <span v-if="batchGenerating">生图中 {{ batchProgress.current }}/{{ batchProgress.total }}</span>
+                  <span v-else>批量生图</span>
+                </el-button>
+                <el-button v-if="batchGenerating" type="danger" @click="handleCancelBatchGenerate">
+                  <el-icon><Close /></el-icon>
+                  取消
+                </el-button>
               </div>
               <div v-loading="isGeneratingStoryboard || loadingScenes" :element-loading-text="isGeneratingStoryboard ? 'AI正在拆分分镜，请耐心等待1-3分钟...' : ''" element-loading-background="rgba(255,255,255,0.85)" class="scene-list">
                 <div 
@@ -379,6 +388,10 @@
                       <ArrowDown />
                     </el-icon>
                     <div class="scene-actions-enhanced" @click.stop>
+                      <el-button size="small" type="success" :loading="generatingSceneImage[scene.id]" @click="handleGenerateSceneImage(scene)" title="生成场景概念图">
+                        <el-icon><Picture /></el-icon>
+                        场景图
+                      </el-button>
                       <el-button size="small" type="primary" @click="handleGenerateSceneVideo(scene)">
                         <el-icon><VideoPlay /></el-icon>
                         生成视频
@@ -424,14 +437,16 @@
                             <el-icon><View /></el-icon>
                             预览
                           </el-button>
-                          <el-button v-else-if="shot.video_status === 'generating' || shot.video_status === 'processing'" size="small" type="warning" disabled>
+                          <el-button v-else-if="shot.video_status === 'generating' || shot.video_status === 'processing' || shot.video_status === 'pending'" size="small" type="warning" disabled>
                             <el-icon :size="16"><Loading /></el-icon>
                             生成中
                           </el-button>
-                          <el-button v-else size="small" type="primary" @click.stop="handleGenerateShotVideo(shot)">
-                            <el-icon><VideoPlay /></el-icon>
-                            生成
-                          </el-button>
+                          <template v-else>
+                            <el-button size="small" type="danger" @click.stop="handleGenerateCogVideo(shot)" :disabled="!shot.scene_image_url" :title="shot.scene_image_url ? '使用CogVideoX生成视频' : '需要先有首帧图'">
+                              <el-icon><VideoPlay /></el-icon>
+                              CogVideo
+                            </el-button>
+                          </template>
                           <el-button 
                             size="small" 
                             type="success"
@@ -529,6 +544,13 @@
             </template>
             <div class="tab-content video-content">
               <div class="content-toolbar">
+                <el-button 
+                  type="danger"
+                  @click="handleBatchGenerateCogVideo"
+                >
+                  <el-icon><VideoPlay /></el-icon>
+                  CogVideoX批量生成
+                </el-button>
                 <el-button 
                   :type="selectedShotIds.length > 0 ? 'primary' : 'default'" 
                   @click="handleBatchGenerate"
@@ -1405,20 +1427,23 @@
               <div class="angles-display">
                 <h5>角度参考</h5>
                 <div class="angles-grid">
-                  <div class="angle-thumb">
+                  <div class="angle-thumb" :class="{ 'has-image': selectedCharacter.front_image_url }">
                     <img v-if="selectedCharacter.front_image_url" :src="getAssetUrl(selectedCharacter.front_image_url)" />
-                    <div v-else class="thumb-empty">正</div>
+                    <div v-else class="thumb-empty" @click="handleGenerateCharView(selectedCharacter, 'front')" title="点击生成">正</div>
                     <span>正面</span>
+                    <el-button v-if="!selectedCharacter.front_image_url" size="mini" type="primary" @click.stop="handleGenerateCharView(selectedCharacter, 'front')">生成</el-button>
                   </div>
-                  <div class="angle-thumb">
+                  <div class="angle-thumb" :class="{ 'has-image': selectedCharacter.side_image_url }">
                     <img v-if="selectedCharacter.side_image_url" :src="getAssetUrl(selectedCharacter.side_image_url)" />
-                    <div v-else class="thumb-empty">侧</div>
+                    <div v-else class="thumb-empty" @click="handleGenerateCharView(selectedCharacter, 'side')" title="点击生成">侧</div>
                     <span>侧面</span>
+                    <el-button v-if="!selectedCharacter.side_image_url" size="mini" type="success" @click.stop="handleGenerateCharView(selectedCharacter, 'side')">生成</el-button>
                   </div>
-                  <div class="angle-thumb">
+                  <div class="angle-thumb" :class="{ 'has-image': selectedCharacter.back_image_url }">
                     <img v-if="selectedCharacter.back_image_url" :src="getAssetUrl(selectedCharacter.back_image_url)" />
-                    <div v-else class="thumb-empty">背</div>
+                    <div v-else class="thumb-empty" @click="handleGenerateCharView(selectedCharacter, 'back')" title="点击生成">背</div>
                     <span>背面</span>
+                    <el-button v-if="!selectedCharacter.back_image_url" size="mini" type="warning" @click.stop="handleGenerateCharView(selectedCharacter, 'back')">生成</el-button>
                   </div>
                 </div>
               </div>
@@ -1454,6 +1479,19 @@
               <el-button type="info" @click="showVariationsDialog(selectedCharacter)">
                 <el-icon><Grid /></el-icon>
                 变体管理
+              </el-button>
+            </div>
+            <!-- 多视角生成按钮 -->
+            <div class="multi-view-actions">
+              <span class="view-actions-label">多视角生成:</span>
+              <el-button size="small" type="primary" :loading="generatingCharView[selectedCharacter.id + '_front']" :disabled="!selectedCharacter.visual_prompt_en && !selectedCharacter.identity_anchors" @click="handleGenerateCharView(selectedCharacter, 'front')">
+                正面
+              </el-button>
+              <el-button size="small" type="success" :loading="generatingCharView[selectedCharacter.id + '_side']" :disabled="!selectedCharacter.visual_prompt_en && !selectedCharacter.identity_anchors" @click="handleGenerateCharView(selectedCharacter, 'side')">
+                侧面
+              </el-button>
+              <el-button size="small" type="warning" :loading="generatingCharView[selectedCharacter.id + '_back']" :disabled="!selectedCharacter.visual_prompt_en && !selectedCharacter.identity_anchors" @click="handleGenerateCharView(selectedCharacter, 'back')">
+                背面
               </el-button>
             </div>
             <!-- 6层锚点展示 -->
@@ -1848,6 +1886,11 @@ const showCharacterDialog = ref(false)
 const creatingCharacter = ref(false)
 const generatingImage = reactive({})
 const generatingShotImage = reactive({})
+const batchGenerating = ref(false)
+const batchProgress = ref({ current: 0, total: 0 })
+const batchCancelled = ref(false)
+const generatingSceneImage = reactive({})
+const generatingCharView = reactive({})
 const calibratingCharacter = reactive({})
 const isEditingCharacter = ref(false)
 const currentEditingCharacter = ref(null)
@@ -2625,7 +2668,10 @@ const handleGenShotImage = async (shot) => {
   ElMessage.info('正在使用CogView生成分镜图片...')
   
   try {
-    const response = await imagesAPI.generateShot(shot.id)
+    // 视觉连续性：检查上一镜头是否有图片
+    const visualContinuityPrompt = await getVisualContinuityPrompt(shot)
+    
+    const response = await imagesAPI.generateShot(shot.id, { visualContinuityPrompt })
     if (response.success && response.imageUrl) {
       ElMessage.success('分镜图片生成成功！')
       // 更新镜头数据
@@ -2646,6 +2692,365 @@ const handleGenShotImage = async (shot) => {
     ElMessage.error(err.response?.data?.message || err.message || '分镜图片生成失败')
   } finally {
     generatingShotImage[shot.id] = false
+  }
+}
+
+// 视觉连续性：获取上一镜头的视觉连续性提示词
+// ==================== CogVideoX视频生成 ====================
+
+// 使用CogVideoX生成视频（图生视频模式）
+const handleGenerateCogVideo = async (shot) => {
+  try {
+    if (!shot?.id) {
+      ElMessage.warning('镜头数据异常')
+      return
+    }
+    
+    // 检查是否有首帧图
+    if (!shot.scene_image_url) {
+      ElMessage.warning('该镜头没有首帧图，请先生成分镜图片')
+      return
+    }
+    
+    // 检查是否正在生成中
+    if (shot.video_status === 'processing' || shot.video_status === 'generating' || shot.video_status === 'pending') {
+      ElMessage.warning('该镜头正在生成中，请稍候')
+      return
+    }
+    
+    // 已有视频时确认是否重新生成
+    if (shot.video_status === 'completed' && shot.video_url) {
+      try {
+        await ElMessageBox.confirm(
+          '该镜头已生成视频，是否重新生成？',
+          '提示',
+          { confirmButtonText: '重新生成', cancelButtonText: '取消', type: 'warning' }
+        )
+      } catch {
+        return // 用户取消
+      }
+    }
+    
+    ElMessage.info('正在使用CogVideoX生成分镜视频...')
+    
+    // 调用CogVideoX视频生成API
+    const response = await videosAPI.generateShot(shot.id, {
+      withAudio: true
+    })
+    
+    if (response.success && response.taskId) {
+      ElMessage.success('CogVideoX视频生成任务已提交')
+      
+      // 保存taskId并开始轮询
+      cogVideoTaskIds.value[shot.id] = response.taskId
+      
+      // 立即轮询一次
+      await pollCogVideoStatus(shot.id)
+    } else {
+      ElMessage.error(response.message || '视频生成失败')
+    }
+  } catch (err) {
+    console.error('CogVideoX视频生成失败:', err)
+    ElMessage.error('生成失败: ' + (err.response?.data?.message || err.message))
+  }
+}
+
+// 轮询CogVideoX视频任务状态
+const pollCogVideoStatus = async (shotId) => {
+  const taskId = cogVideoTaskIds.value[shotId]
+  if (!taskId) {
+    console.error('未找到taskId:', shotId)
+    return
+  }
+  
+  // 设置轮询定时器
+  if (cogVideoTaskTimers.value[shotId]) {
+    clearInterval(cogVideoTaskTimers.value[shotId])
+  }
+  
+  cogVideoTaskTimers.value[shotId] = setInterval(async () => {
+    try {
+      const res = await videosAPI.getTaskStatus(taskId)
+      
+      if (res.success) {
+        // 更新镜头状态
+        const scene = scenes.value.find(s => s.shots?.some(shot => shot.id === shotId))
+        if (scene) {
+          const shot = scene.shots.find(s => s.id === shotId)
+          if (shot) {
+            if (res.status === 'completed') {
+              // 视频生成完成
+              shot.video_status = 'completed'
+              shot.video_url = res.localVideoPath
+              shot.thumbnail = res.coverImageUrl
+              clearInterval(cogVideoTaskTimers.value[shotId])
+              delete cogVideoTaskTimers.value[shotId]
+              delete cogVideoTaskIds.value[shotId]
+              ElMessage.success('CogVideoX视频生成完成！')
+              await loadShots() // 刷新列表
+            } else if (res.status === 'failed') {
+              // 视频生成失败
+              shot.video_status = 'failed'
+              clearInterval(cogVideoTaskTimers.value[shotId])
+              delete cogVideoTaskTimers.value[shotId]
+              delete cogVideoTaskIds.value[shotId]
+              ElMessage.error('视频生成失败: ' + (res.error || '未知错误'))
+            } else {
+              // 仍在处理中
+              shot.video_status = 'processing'
+              console.log('CogVideoX任务进行中:', taskId)
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error('轮询CogVideoX任务状态失败:', err)
+      clearInterval(cogVideoTaskTimers.value[shotId])
+      delete cogVideoTaskTimers.value[shotId]
+    }
+  }, 3000) // 每3秒轮询一次
+}
+
+// 批量生成CogVideoX视频
+const handleBatchGenerateCogVideo = async () => {
+  // 收集所有未完成且有首帧图的镜头
+  const shotsToGenerate = []
+  
+  if (selectedShotIds.value.length > 0) {
+    // 有选中的镜头
+    for (const scene of scenes.value) {
+      if (scene.shots) {
+        for (const shot of scene.shots) {
+          if (selectedShotIds.value.includes(shot.id) && 
+              shot.scene_image_url && 
+              shot.video_status !== 'completed' &&
+              shot.video_status !== 'pending' &&
+              shot.video_status !== 'processing') {
+            shotsToGenerate.push(shot)
+          }
+        }
+      }
+    }
+  } else {
+    // 没有选中，生成所有未完成的
+    for (const scene of scenes.value) {
+      if (scene.shots) {
+        for (const shot of scene.shots) {
+          if (shot.scene_image_url && 
+              shot.video_status !== 'completed' &&
+              shot.video_status !== 'pending' &&
+              shot.video_status !== 'processing') {
+            shotsToGenerate.push(shot)
+          }
+        }
+      }
+    }
+  }
+  
+  if (shotsToGenerate.length === 0) {
+    ElMessage.info('没有可生成视频的镜头（需要先有首帧图）')
+    return
+  }
+  
+  ElMessage.info('开始批量生成 ' + shotsToGenerate.length + ' 个CogVideoX视频...')
+  
+  for (const shot of shotsToGenerate) {
+    await handleGenerateCogVideo(shot)
+    // 等待一下避免请求过于密集
+    await new Promise(r => setTimeout(r, 500))
+  }
+  
+  ElMessage.success('已提交 ' + shotsToGenerate.length + ' 个视频生成任务')
+}
+
+const getVisualContinuityPrompt = async (shot) => {
+  // 找到当前镜头在场景中的位置
+  const scene = scenes.value.find(s => s.id === shot.scene_id)
+  if (!scene || !scene.shots) return ''
+  
+  const shotIndex = scene.shots.findIndex(s => s.id === shot.id)
+  if (shotIndex <= 0) return ''
+  
+  const prevShot = scene.shots[shotIndex - 1]
+  
+  // 检查上一镜头是否有生成的图片或视频
+  if (prevShot.scene_image_url || prevShot.thumbnail || prevShot.result_url) {
+    const imageUrl = prevShot.scene_image_url || prevShot.thumbnail || prevShot.result_url
+    // 由于cogview-3-flash不支持图生图，我们用提示词来实现视觉连续性
+    return 'maintain visual continuity with previous shot, consistent style and atmosphere'
+  }
+  
+  // 如果没有上一镜头图，使用end_frame_prompt
+  if (prevShot.end_frame_prompt) {
+    return `maintain visual continuity with previous shot: ${prevShot.end_frame_prompt}`
+  }
+  
+  return ''
+}
+
+// 批量生图
+const handleBatchGenerateImages = async () => {
+  // 收集所有未生图的镜头
+  const shotsWithoutImage = []
+  for (const scene of scenes.value) {
+    if (scene.shots) {
+      for (const shot of scene.shots) {
+        if (!shot.scene_image_url && (shot.image_prompt || shot.visual_prompt)) {
+          shotsWithoutImage.push({ shot, scene })
+        }
+      }
+    }
+  }
+  
+  if (shotsWithoutImage.length === 0) {
+    ElMessage.info('所有镜头都已生成图片或缺少提示词')
+    return
+  }
+  
+  batchGenerating.value = true
+  batchCancelled.value = false
+  batchProgress.value = { current: 0, total: shotsWithoutImage.length }
+  ElMessage.info(`开始批量生图，共 ${shotsWithoutImage.length} 个镜头`)
+  
+  for (const { shot, scene } of shotsWithoutImage) {
+    if (batchCancelled.value) {
+      ElMessage.warning('批量生图已取消')
+      break
+    }
+    
+    try {
+      generatingShotImage[shot.id] = true
+      
+      // 获取视觉连续性提示词
+      const visualContinuityPrompt = await getVisualContinuityPrompt(shot)
+      
+      const response = await imagesAPI.generateShot(shot.id, { visualContinuityPrompt })
+      if (response.success && response.imageUrl) {
+        shot.scene_image_url = response.imageUrl
+        const shotIndex = scene.shots.findIndex(s => s.id === shot.id)
+        if (shotIndex !== -1) {
+          scene.shots[shotIndex].scene_image_url = response.imageUrl
+        }
+      }
+      batchProgress.value.current++
+    } catch (err) {
+      console.error('批量生图失败:', shot.shot_number || shot.id, err)
+    } finally {
+      generatingShotImage[shot.id] = false
+    }
+  }
+  
+  batchGenerating.value = false
+  if (!batchCancelled.value) {
+    ElMessage.success(`批量生图完成！成功生成 ${batchProgress.value.current}/${batchProgress.value.total} 张图片`)
+  }
+}
+
+// 取消批量生图
+const handleCancelBatchGenerate = () => {
+  batchCancelled.value = true
+  ElMessage.info('正在取消批量生图...')
+}
+
+// 生成场景参考图
+const handleGenerateSceneImage = async (scene) => {
+  if (!scene.content && !scene.location) {
+    ElMessage.warning('场景缺少描述信息，无法生成场景图')
+    return
+  }
+  
+  generatingSceneImage[scene.id] = true
+  ElMessage.info('正在生成场景概念图...')
+  
+  try {
+    // 构建场景描述prompt
+    const locationDesc = scene.location || ''
+    const timeDesc = scene.time_of_day || ''
+    const contentDesc = scene.content ? scene.content.substring(0, 300) : ''
+    
+    const prompt = `${locationDesc}, ${timeDesc}, ${contentDesc}, anime style, concept art, detailed environment, high quality`
+    
+    const response = await imagesAPI.generate({
+      prompt,
+      model: 'cogview-3-flash',
+      size: '1344x768'
+    })
+    
+    if (response.success && response.imageUrl) {
+      ElMessage.success('场景图生成成功！')
+      // 更新场景数据
+      scene.scene_image_url = response.imageUrl
+      // 保存到后端
+      try {
+        await scenesAPI.update(scene.id, { scene_image_url: response.imageUrl })
+      } catch (e) {
+        console.error('保存场景图URL失败:', e)
+      }
+    } else {
+      ElMessage.error(response.message || '生成失败')
+    }
+  } catch (err) {
+    console.error('生成场景图失败:', err)
+    ElMessage.error(err.response?.data?.message || err.message || '场景图生成失败')
+  } finally {
+    generatingSceneImage[scene.id] = false
+  }
+}
+
+// 生成角色多视角图片
+const handleGenerateCharView = async (char, viewType) => {
+  if (!char.visual_prompt_en && !char.identity_anchors) {
+    ElMessage.warning('请先进行角色校准后再生成图片')
+    return
+  }
+  
+  const viewKey = char.id + '_' + viewType
+  generatingCharView[viewKey] = true
+  
+  const viewLabels = { front: '正面', side: '侧面', back: '背面' }
+  ElMessage.info(`正在生成角色${viewLabels[viewType]}图...`)
+  
+  try {
+    // 构建带视角的prompt
+    const viewPrompts = {
+      front: 'front view, facing the camera directly, full face visible, centered composition',
+      side: 'side profile view, 90 degree angle, showing full side profile',
+      back: 'back view, showing character from behind, no face visible'
+    }
+    
+    const basePrompt = char.visual_prompt_en || ''
+    const viewPrompt = basePrompt ? `${basePrompt}, ${viewPrompts[viewType]}` : viewPrompts[viewType]
+    
+    const response = await imagesAPI.generateCharacter(char.id, {
+      view_type: viewType,
+      prompt: viewPrompt,
+      model: 'cogview-3-flash'
+    })
+    
+    if (response.success && response.imageUrl) {
+      ElMessage.success(`角色${viewLabels[viewType]}图生成成功！`)
+      
+      // 更新角色数据
+      const imageField = viewType + '_image_url'
+      char[imageField] = response.imageUrl
+      
+      // 保存到后端
+      try {
+        await charactersAPI.update(char.id, { [imageField]: response.imageUrl })
+      } catch (e) {
+        console.error('保存角色视角图URL失败:', e)
+      }
+      
+      // 刷新角色列表以更新右侧面板
+      await loadCharacters()
+    } else {
+      ElMessage.error(response.message || '生成失败')
+    }
+  } catch (err) {
+    console.error(`生成角色${viewLabels[viewType]}图失败:`, err)
+    ElMessage.error(err.response?.data?.message || err.message || '角色图片生成失败')
+  } finally {
+    generatingCharView[viewKey] = false
   }
 }
 
@@ -5474,6 +5879,82 @@ const handleMoveShot = async (scene, shot, direction) => {
 .char-avatar {
   position: relative;
 }
+
+/* 多视角生成按钮 */
+.multi-view-actions {
+  margin-top: 12px;
+  padding: 10px;
+  background: #f5f7fa;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.view-actions-label {
+  font-size: 13px;
+  color: #606266;
+  font-weight: 500;
+}
+
+/* 角度缩略图增强 */
+.angles-grid .angle-thumb {
+  position: relative;
+}
+
+.angles-grid .angle-thumb.has-image img {
+  border: 2px solid #67c23a;
+}
+
+.angles-grid .angle-thumb .thumb-empty {
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.angles-grid .angle-thumb .thumb-empty:hover {
+  background: #409eff;
+  color: #fff;
+}
+
+.angles-grid .angle-thumb .el-button {
+  position: absolute;
+  bottom: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.angles-grid .angle-thumb:hover .el-button {
+  opacity: 1;
+}
+
+/* 批量生图进度 */
+.batch-progress {
+  margin: 0 16px;
+  flex: 1;
+  max-width: 200px;
+}
+
+.batch-progress .el-progress__text {
+  font-size: 12px !important;
+}
+
+/* 场景动作按钮增强 */
+.scene-actions-enhanced .el-button + .el-button {
+  margin-left: 4px;
+}
+
+/* 场景图预览 */
+.scene-image-preview {
+  width: 100%;
+  height: 120px;
+  object-fit: cover;
+  border-radius: 8px;
+  margin-top: 8px;
+}
+
 </style>
 
 /* v5.0 角色一致性系统样式 */

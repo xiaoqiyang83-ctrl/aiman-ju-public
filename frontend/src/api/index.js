@@ -130,7 +130,8 @@ export const scenesAPI = {
   list: (scriptId) => api.get('/scenes?script_id=' + scriptId),
   generate: (scriptId) => api.post('/scenes/generate?script_id=' + scriptId),
   update: (id, data) => api.put('/scenes/' + id, data),
-  delete: (id) => api.delete('/scenes/' + id)
+  delete: (id) => api.delete('/scenes/' + id),
+  generateImage: (sceneId, data) => api.post('/scenes/' + sceneId + '/generate-image', data)
 }
 
 // ==================== 镜头相关 ====================
@@ -145,11 +146,26 @@ export const shotsAPI = {
 
 // ==================== 视频相关 ====================
 export const videosAPI = {
+  // 原有API（兼容旧版）
   text2video: (shotId, data) => api.post('/videos/text2video/' + shotId, data),
   image2video: (shotId, data) => api.post('/videos/image2video/' + shotId, data),
   reference2video: (shotId, data) => api.post('/videos/reference2video/' + shotId, data),
   regenerate: (shotId, data) => api.post('/videos/regenerate/' + shotId, data),
-  merge: (data) => api.post('/videos/merge', data)
+  merge: (data) => api.post('/videos/merge', data),
+
+  // CogVideoX视频生成API（新增）
+  // 通用视频生成
+  generate: (data) => api.post('/videos/generate', data),
+  // 分镜生视频（图生视频）
+  generateShot: (shotId, data) => api.post('/videos/generate-shot/' + shotId, data),
+  // 查询任务状态（轮询）
+  getTaskStatus: (taskId) => api.get('/videos/task/' + taskId),
+  // 批量生视频
+  batchGenerate: (data) => api.post('/videos/batch-generate', data),
+  // 获取支持的模型列表
+  getModels: () => api.get('/videos/models'),
+  // 测试API连接
+  test: () => api.get('/videos/test')
 }
 
 // ==================== 音频相关 ====================
@@ -173,7 +189,7 @@ export const imagesAPI = {
   // 通用生图（直接传prompt）
   generate: (data) => api.post('/images/generate', data),
   // 生成分镜图片
-  generateShot: (shotId) => api.post('/images/generate-shot/' + shotId),
+  generateShot: (shotId, data) => api.post('/images/generate-shot/' + shotId, data),
   // 生成角色图片（通过统一images路由）
   generateCharacter: (characterId, data) => api.post('/images/generate-character/' + characterId, data),
   // 测试API连接
