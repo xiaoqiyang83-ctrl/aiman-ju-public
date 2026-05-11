@@ -260,7 +260,7 @@
                   </div>
                   <div class="script-actions">
                     <el-button size="small" type="primary" @click.stop="handleEditScript(script)">编辑</el-button>
-                    <el-button size="small" type="success" @click.stop="handleGenStoryboard(script)">分镜</el-button>
+                    <el-button size="small" type="success" :disabled="isGeneratingStoryboard" @click.stop="handleGenStoryboard(script)">{{ isGeneratingStoryboard ? '生成中...' : '分镜' }}</el-button>
                     <el-button size="small" type="danger" @click.stop="handleDeleteScript(script)">删除</el-button>
                   </div>
                 </el-card>
@@ -346,16 +346,16 @@
             </template>
             <div class="tab-content storyboard-content">
               <div class="content-toolbar">
-                <el-button type="primary" @click="handleGenerateScenes">
-                  <el-icon><MagicStick /></el-icon>
-                  AI生成分镜
+                <el-button type="primary" :loading="isGeneratingStoryboard" :disabled="isGeneratingStoryboard" @click="handleGenerateScenes">
+                  <el-icon v-if="!isGeneratingStoryboard"><MagicStick /></el-icon>
+                  {{ isGeneratingStoryboard ? '正在生成分镜...' : 'AI生成分镜' }}
                 </el-button>
                 <el-button @click="handleBatchSelect">
                   <el-icon><Select /></el-icon>
                   批量选择
                 </el-button>
               </div>
-              <div v-loading="loadingScenes" class="scene-list">
+              <div v-loading="isGeneratingStoryboard || loadingScenes" :element-loading-text="isGeneratingStoryboard ? 'AI正在拆分分镜，请耐心等待1-3分钟...' : ''" element-loading-background="rgba(255,255,255,0.85)" class="scene-list">
                 <div 
                   v-for="scene in scenes" 
                   :key="scene.id"
@@ -1782,6 +1782,7 @@ const handleCharacterClick = (char) => {
 
 // ==================== 场景/分镜相关 ====================
 const loadingScenes = ref(false)
+const isGeneratingStoryboard = ref(false)
 const scenes = ref([])
 const currentScriptId = ref(null)
 const expandedSceneIds = ref([]) // 折叠展开的场景ID列表
@@ -2121,7 +2122,8 @@ const handleGenStoryboard = async (script) => {
   currentScriptId.value = script.id
   activeTab.value = 'storyboard'
   emit('tab-change', 'storyboard')
-  ElMessage.success('正在生成分镜...')
+  isGeneratingStoryboard.value = true
+  ElMessage.info('正在生成分镜，AI需要思考1-3分钟，请耐心等待...')
   
   try {
     // 先清空旧场景和镜头
@@ -2134,10 +2136,12 @@ const handleGenStoryboard = async (script) => {
     await scenesAPI.generate(script.id, {})
     await loadScenes()
     await loadShots()
-    ElMessage.success('分镜生成完成')
+    ElMessage.success('分镜生成完成！')
   } catch (err) {
     console.error('生成分镜失败:', err)
     ElMessage.error('生成分镜失败: ' + (err.response?.data?.message || err.message))
+  } finally {
+    isGeneratingStoryboard.value = false
   }
 }
 
@@ -2592,7 +2596,8 @@ const handleGenerateScenes = async () => {
     }
   }
   
-  ElMessage.success('正在生成分镜...')
+  isGeneratingStoryboard.value = true
+  ElMessage.info('正在生成分镜，AI需要思考1-3分钟，请耐心等待...')
   try {
     // 先清空旧场景和镜头
     for (const scene of scenes.value) {
@@ -2604,10 +2609,12 @@ const handleGenerateScenes = async () => {
     await scenesAPI.generate(currentScriptId.value, {})
     await loadScenes(true)
     await loadShots(true)
-    ElMessage.success('分镜生成完成')
+    ElMessage.success('分镜生成完成！')
   } catch (err) {
     console.error('生成分镜失败:', err)
     ElMessage.error('生成分镜失败: ' + (err.response?.data?.message || err.message))
+  } finally {
+    isGeneratingStoryboard.value = false
   }
 }
 
