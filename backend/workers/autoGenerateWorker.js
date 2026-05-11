@@ -4,7 +4,7 @@
  */
 const { Worker } = require('bullmq');
 const { redis } = require('../config/redis');
-const { pool } = require('../shared');
+const { pool } = require('../config/database');
 const { updateTaskStatus, submitVideoJob, submitAudioJob, submitExportJob } = require('../queues/submit');
 const { generateShotsForScene, splitScriptToScenes } = require('../services/storyboard-split');
 

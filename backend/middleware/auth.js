@@ -5,7 +5,7 @@ const jwt = require('jsonwebtoken');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'aimanju-jwt-secret-key-2024-change-in-production';
 
-const { pool } = require('../shared');
+const { pool } = require('../config/database');
 const { CREDIT_COSTS } = require('../services/credit-service');
 
 /**

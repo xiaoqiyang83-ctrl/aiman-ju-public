@@ -8,7 +8,7 @@ const { exportWorker } = require('./exportWorker');
 const { imageWorker } = require('./imageWorker');
 const { redis } = require('../config/redis');
 const { queues, getQueueStats, closeAllQueues } = require('../queues');
-const { pool } = require('../shared');
+const { pool } = require('../config/database');
 
 // 所有Worker实例
 const workers = {

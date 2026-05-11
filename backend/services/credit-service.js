@@ -1,4 +1,4 @@
-const { pool } = require('../shared');
+const { pool } = require('../config/database');
 
 /**
  * 积分消耗规则

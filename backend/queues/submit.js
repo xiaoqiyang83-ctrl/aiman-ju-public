@@ -9,7 +9,7 @@
  * characters: id, script_id, user_id, name, description, created_at, gender, age, occupation, appearance, costume, personality, image_url, image_prompt, job_id, image_status
  */
 const { queues } = require('./index');
-const { pool } = require('../shared');
+const { pool } = require('../config/database');
 const crypto = require('crypto');
 
 // Mock模式配置

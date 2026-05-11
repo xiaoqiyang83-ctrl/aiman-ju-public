@@ -7,7 +7,7 @@ const path = require('path');
 const fs = require('fs').promises;
 const { redis } = require('../config/redis');
 const { updateTaskStatus } = require('../queues/submit');
-const { pool } = require('../shared');
+const { pool } = require('../config/database');
 
 // Worker配置
 const VIDEO_CONCURRENCY = parseInt(process.env.VIDEO_CONCURRENCY) || 1;
