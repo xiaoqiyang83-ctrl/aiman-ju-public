@@ -926,7 +926,7 @@ ${scriptContent}`;
 
     let result;
     try {
-        result = await generateTextWithProvider(provider, { system, user, temperature: 0.3, maxTokens: 8000, enableRetry: true });
+        result = await generateTextWithProvider(provider, { system, user, temperature: 0.3, maxTokens: 16000, enableRetry: true });
     } catch (e) {
         const msg = String(e?.message || '');
         if (provider === 'ernie' && /client_id|client id|invalid|无效/i.test(msg)) {
