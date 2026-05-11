@@ -6,37 +6,14 @@ const { Worker } = require('bullmq');
 const { redis } = require('../config/redis');
 const { pool } = require('../shared');
 const { updateTaskStatus, submitVideoJob, submitAudioJob, submitExportJob } = require('../queues/submit');
+const { generateShotsForScene, splitScriptToScenes } = require('../services/storyboard-split');
 
 async function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 function splitToShots(content) {
-  const text = String(content || '').trim();
-  const parts = text
-    .split(/[\n。！？!?]/)
-    .map(s => s.trim())
-    .filter(Boolean);
-
-  const length = text.length;
-  let count = length < 20 ? 2 : 3;
-  if (length >= 180) count = 4;
-  if (parts.length >= 3 && count < 3) count = 3;
-  if (parts.length >= 4 && count < 4) count = 4;
-  if (count < 2) count = 2;
-
-  const buckets = Array.from({ length: count }, () => []);
-  for (let i = 0; i < parts.length; i++) {
-    buckets[i % count].push(parts[i]);
-  }
-
-  const shotTypes = ['全景', '中景', '近景', '特写'];
-  return buckets.map((bucket, idx) => ({
-    shot_number: idx + 1,
-    shot_type: shotTypes[idx] || '中景',
-    camera_movement: '固定',
-    visual_description: bucket.join('，') || text
-  }));
+  return generateShotsForScene({}, content).shots;
 }
 
 /**
@@ -66,36 +43,66 @@ async function processAutoGenerate(job) {
     if (scriptRes.rows.length === 0) throw new Error('剧本不存在');
     const scriptContent = scriptRes.rows[0].content;
 
-    // 模拟分镜生成逻辑 (复用 scenes.js 的逻辑)
-    const lines = scriptContent.split('\n').filter(line => line.trim());
-    const scenesCount = Math.ceil(lines.length / 3);
+    const sceneSpecs = splitScriptToScenes(scriptContent);
+    const scenesCount = sceneSpecs.length || 1;
     
     // 清理旧分镜 (可选，按需决定是否清理)
     // await pool.query('DELETE FROM scenes WHERE script_id = $1', [scriptId]);
 
     const generatedShots = [];
-    for (let i = 0; i < lines.length; i += 3) {
-      const sceneNumber = Math.floor(i / 3) + 1;
-      const content = lines.slice(i, i + 3).join('\n');
+    for (let i = 0; i < sceneSpecs.length; i++) {
+      const sceneNumber = i + 1;
+      const spec = sceneSpecs[i];
+      const content = spec.content || '';
       
       const sceneResult = await pool.query(
-        `INSERT INTO scenes (script_id, user_id, scene_number, title, content, status)
-         VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-        [scriptId, userId, String(sceneNumber), `场景${sceneNumber}`, content, 'completed']
+        `INSERT INTO scenes (script_id, user_id, episode, scene_number, title, location, time_of_day, content, status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+        [
+          scriptId,
+          userId,
+          spec.episode || '',
+          String(spec.scene_number || sceneNumber),
+          spec.title || `场景${sceneNumber}`,
+          spec.location || '',
+          spec.time_of_day || '',
+          content,
+          'completed',
+        ]
       );
       const sceneId = sceneResult.rows[0].id;
 
-      const shots = splitToShots(content);
+      const { shots } = generateShotsForScene(
+        { id: sceneId, title: spec.title, location: spec.location, time_of_day: spec.time_of_day },
+        content
+      );
       for (const sh of shots) {
         const shotResult = await pool.query(
-          `INSERT INTO shots (scene_id, script_id, user_id, shot_number, shot_type, camera_movement, visual_description, duration, video_status)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, 5, 'none') RETURNING id`,
-          [sceneId, scriptId, userId, sh.shot_number, sh.shot_type, sh.camera_movement, sh.visual_description]
+          `INSERT INTO shots (
+             scene_id, script_id, user_id, shot_number, shot_type, camera_movement,
+             visual_description, visual_prompt, original_text, dialogue, action_description, duration, video_status, status
+           )
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'none', 'pending') RETURNING id`,
+          [
+            sceneId,
+            scriptId,
+            userId,
+            sh.shot_number,
+            sh.shot_type,
+            sh.camera_movement,
+            sh.visual_description || '',
+            sh.visual_prompt || sh.visual_description || '',
+            sh.original_text || '',
+            sh.dialogue || '',
+            sh.action_description || '',
+            sh.duration ?? 4
+          ]
         );
         generatedShots.push({
           id: shotResult.rows[0].id,
           sceneId,
-          content: sh.visual_description,
+          visual_prompt: sh.visual_prompt || sh.visual_description,
+          original_text: sh.original_text || '',
           shot_type: sh.shot_type,
           camera_movement: sh.camera_movement
         });
@@ -121,7 +128,7 @@ async function processAutoGenerate(job) {
       const vJobId = await submitVideoJob(shot.id, 'text2video', {
         projectId,
         scriptId,
-        visual_description: shot.content,
+        visual_description: shot.visual_prompt,
         shot_type: shot.shot_type || '中景',
         camera_movement: shot.camera_movement || '固定'
       }, userId);
@@ -129,7 +136,7 @@ async function processAutoGenerate(job) {
 
       // 提交音频任务
       const aJobId = await submitAudioJob(shot.sceneId, 'tts', {
-        text: shot.content,
+        text: shot.original_text || shot.visual_prompt || '',
         voice_id: 'female_01',
         voice_name: '温柔女声',
         volume: 0.8,
