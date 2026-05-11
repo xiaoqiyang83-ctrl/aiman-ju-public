@@ -344,7 +344,7 @@ const generateText = async ({
             model: config.model,
             messages: messages,
             temperature: temperature,
-            max_tokens: maxTokens
+            max_tokens: maxTokens,
         };
 
         console.log('[AI Service] 请求数据:', JSON.stringify({
@@ -421,7 +421,8 @@ const generateTextWithProvider = async (provider, { system, user, temperature = 
             model: config.model,
             messages,
             temperature,
-            max_tokens: maxTokens
+            max_tokens: maxTokens,
+            response_format: { type: 'json_object' }
         };
 
         const url = new URL('/chat/completions', config.baseURL);
