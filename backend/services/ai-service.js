@@ -474,6 +474,11 @@ function extractFirstJsonObject(text) {
             if (ch === '\t') return '\\t';
             return '';
         });
+        // 额外清理：字面的反斜杠+n (不是真正的换行，而是两个字符)
+        // 把 " 这种内部换行也清理掉
+        candidate = candidate.replace(/\n/g, '\\n');
+        // 清理其他可能的非法空白（如全角空格等）
+        candidate = candidate.replace(/[\xa0\u3000]/g, ' ');
         return candidate;
     }
     return '';
@@ -940,14 +945,39 @@ ${scriptContent}`;
     try {
         parsed = JSON.parse(jsonText);
     } catch (e) {
-        // 最后一次尝试：暴力清理所有控制字符（包括换行符）
+        // 第二次尝试：从原始内容重新提取，强力清洗
         try {
-            const cleaned = jsonText.replace(/[\x00-\x1f]/g, ' ');
-            parsed = JSON.parse(cleaned);
-            console.log('[AI Service] JSON解析通过（二次清理后）');
+            const raw = result.content || '';
+            const jStart = raw.indexOf('{');
+            const jEnd = raw.lastIndexOf('}');
+            if (jStart < 0 || jEnd <= jStart) throw new Error('无法定位JSON边界');
+            let extracted = raw.slice(jStart, jEnd + 1);
+            // 把真正的换行/回车/制表替换为空格
+            extracted = extracted.replace(/[\n\r\t]/g, ' ');
+            // 把所有连续空白替换为单空格
+            extracted = extracted.replace(/\s+/g, ' ');
+            // 移除开头 { 后的多余空格
+            extracted = extracted.replace(/^\{\s+/, '{');
+            // 移除结尾 } 前的多余空格
+            extracted = extracted.replace(/\s+}$/, '}');
+            // 移除属性名后的多余空格
+            extracted = extracted.replace(/\"\s+:/g, '":');
+            // 移除结尾逗号
+            extracted = extracted.replace(/,(\s*[\]\}])/g, '$1');
+            extracted = extracted.trim();
+            parsed = JSON.parse(extracted);
+            console.log('[AI Service] JSON解析通过（二次提取清理后）');
         } catch (e2) {
-            console.error('[AI Service] JSON原始内容前200字符:', jsonText.slice(0, 200));
-            throw new Error('AI返回JSON解析失败: ' + e.message);
+            // 第三次尝试：只保留JSON有效字符
+            try {
+                let cleaned = jsonText.replace(/[^\x20-\x7e\u4e00-\u9fa5\u3000-\u303f\uff00-\uffef\{\}\[\]":,.\-+truefalse_null\\\s]/g, '');
+                cleaned = cleaned.replace(/\s+/g, ' ').trim();
+                parsed = JSON.parse(cleaned);
+                console.log('[AI Service] JSON解析通过（三次字符过滤后）');
+            } catch (e3) {
+                console.error('[AI Service] JSON原始内容前500字符:', jsonText.slice(0, 500));
+                throw new Error('AI返回JSON解析失败: ' + e.message);
+            }
         }
     }
 
