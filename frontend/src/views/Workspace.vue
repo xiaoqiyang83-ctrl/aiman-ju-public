@@ -2123,7 +2123,7 @@ const handleGenStoryboard = async (script) => {
   activeTab.value = 'storyboard'
   emit('tab-change', 'storyboard')
   isGeneratingStoryboard.value = true
-  ElMessage.info('正在生成分镜，AI需要思考1-3分钟，请耐心等待...')
+  ElMessage.info('正在生成分镜，AI处理中，预计1-3分钟，请耐心等待...')
   
   try {
     // 先清空旧场景和镜头
@@ -2597,7 +2597,7 @@ const handleGenerateScenes = async () => {
   }
   
   isGeneratingStoryboard.value = true
-  ElMessage.info('正在生成分镜，AI需要思考1-3分钟，请耐心等待...')
+  ElMessage.info('正在生成分镜，AI处理中，预计1-3分钟，请耐心等待...')
   try {
     // 先清空旧场景和镜头
     for (const scene of scenes.value) {
