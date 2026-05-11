@@ -1352,10 +1352,56 @@
       </template>
     </el-dialog>
 
-    <!-- ===== 右侧Tab面板 - 角色预览 ===== -->
-    <div class="content-right" v-if="selectedCharacter">
+    <!-- ===== 问题5修复：右侧Tab面板 - 角色和视频预览 ===== -->
+    <div class="content-right" v-if="showVideoPlayer || selectedCharacter">
       <div class="right-panel">
         <div class="panel-content">
+          <!-- 视频预览（选中镜头时自动显示） -->
+          <div v-if="currentPreviewVideo" class="video-preview-panel">
+            <h4 class="panel-title">
+              <span><el-icon><VideoPlay /></el-icon> 镜头 {{ currentPreviewVideo.shot_number || '预览' }}</span>
+              <el-button size="small" text @click="currentPreviewVideo = null">
+                <el-icon><Close /></el-icon>
+              </el-button>
+            </h4>
+            <div class="video-player-container" @click="toggleVideoPlay">
+              <video 
+                v-if="currentPreviewVideo.video_url || currentPreviewVideo.result_url"
+                :src="getAssetUrl(currentPreviewVideo.video_url || currentPreviewVideo.result_url)"
+                controls
+                preload="metadata"
+                class="preview-video"
+                :poster="getAssetUrl(currentPreviewVideo.thumbnail)"
+              >
+                您的浏览器不支持视频播放
+              </video>
+              <div v-else class="no-video-placeholder">
+                <el-icon><VideoPlay /></el-icon>
+                <p>暂无视频文件</p>
+              </div>
+            </div>
+            <div class="video-info">
+              <div class="info-item">
+                <span class="label">景别：</span>
+                <span class="value">{{ currentPreviewVideo.shot_type || '-' }}</span>
+              </div>
+              <div class="info-item">
+                <span class="label">运镜：</span>
+                <span class="value">{{ currentPreviewVideo.camera_movement || '固定' }}</span>
+              </div>
+              <div class="info-item">
+                <span class="label">状态：</span>
+                <el-tag :type="getVideoStatusType(currentPreviewVideo.video_status)" size="small">
+                  {{ getVideoStatusText(currentPreviewVideo.video_status) }}
+                </el-tag>
+              </div>
+            </div>
+            <div class="video-actions">
+              <el-button type="primary" @click="handleRegenerate(currentPreviewVideo)">重新生成</el-button>
+              <el-button type="success" @click="handleDownloadVideo(currentPreviewVideo)">下载视频</el-button>
+            </div>
+          </div>
+          
           <!-- 角色详情（选中角色时自动显示） -->
           <div v-if="selectedCharacter" class="character-preview-panel">
             <h4 class="panel-title">
@@ -1542,8 +1588,8 @@
       </template>
     </el-dialog>
 
-    <div v-if="!selectedCharacter" class="empty-panel">
-            <el-empty description="点击角色查看详情" />
+    <div v-if="!currentPreviewVideo && !selectedCharacter" class="empty-panel">
+            <el-empty description="点击预览按钮查看详情" />
           </div>
         </div>
       </div>
@@ -1905,6 +1951,7 @@ const toggleVideoPlay = () => {
 
 // 点击角色卡片时显示右侧面板
 const handleCharacterClick = (char) => {
+  currentPreviewVideo.value = null  // 清除视频预览
   selectedCharacter.value = char
 }
 
@@ -3117,6 +3164,12 @@ const handleDeleteScene = async (scene) => {
     await scenesAPI.delete(scene.id)
     ElMessage.success('删除成功')
     
+    // 如果删除的是当前选中的镜头所属的场景，清空预览
+    if (currentPreviewVideo.value?.scene_id === scene.id) {
+      showVideoPlayer.value = false
+      currentPreviewVideo.value = null
+    }
+
     await loadScenes()
     await loadShots()
     
@@ -3600,11 +3653,16 @@ const handleGenerateSingle = async (row) => {
   }
 }
 
-// 视频预览（新窗口打开）
+// 视频预览（右侧面板中播放）
+const currentPreviewVideo = ref(null)
+const showVideoPlayer = ref(false)
+
 const handlePreviewVideo = (row) => {
   if (row.video_url || row.result_url) {
-    const videoUrl = row.video_url || row.result_url
-    window.open(videoUrl, '_blank')
+    selectedCharacter.value = null  // 清除角色详情
+    currentPreviewVideo.value = row
+    showVideoPlayer.value = true
+    ElMessage.info('点击视频预览区域播放视频')
   } else {
     ElMessage.warning('暂无视频文件')
   }
