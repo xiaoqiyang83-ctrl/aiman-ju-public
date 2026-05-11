@@ -4628,14 +4628,14 @@ const handleMoveShot = async (scene, shot, direction) => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 12px 8px;
+  gap: 4px;
+  padding: 8px 6px;
   background: #f5f7fa;
   border: none;
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s;
-  min-height: 80px;
+  min-height: 65px;
   overflow: hidden;
 }
 
