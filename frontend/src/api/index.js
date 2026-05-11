@@ -251,4 +251,20 @@ export const getAssetUrl = (url) => {
   return base + (url.startsWith('/') ? '' : '/') + url
 }
 
+// ==================== TTS配音相关 ====================
+export const ttsAPI = {
+  // 获取可用音色列表
+  getVoices: () => api.get('/tts/voices'),
+  // 生成单个镜头配音
+  generate: (data) => api.post('/tts/generate', data),
+  // 批量生成配音
+  generateBatch: (data) => api.post('/tts/generate-batch', data),
+  // 删除镜头配音
+  remove: (shotId) => api.delete('/tts/' + shotId),
+  // 获取剧本下所有镜头的配音状态
+  getStatus: (scriptId) => api.get('/tts/status/' + scriptId),
+  // 更新角色默认音色
+  updateCharacterVoice: (data) => api.put('/tts/character-voice', data)
+}
+
 export default api

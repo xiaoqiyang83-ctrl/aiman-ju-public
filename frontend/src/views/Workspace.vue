@@ -652,60 +652,170 @@
               <el-tabs v-model="audioTab" class="audio-sub-tabs">
                 <!-- AI配音 -->
                 <el-tab-pane label="AI配音" name="tts">
-                  <div class="audio-section">
-                    <el-form label-width="80px" class="tts-form">
-                      <el-form-item label="选择音色">
-                        <el-select v-model="ttsForm.voiceId" placeholder="请选择音色" style="width: 100%">
-                          <el-option
-                            v-for="voice in voiceList"
-                            :key="voice.voice_id"
-                            :label="voice.voice_name"
-                            :value="voice.voice_id"
-                          >
-                            <span>{{ voice.voice_name }}</span>
-                            <span class="voice-gender">{{ voice.gender === 'female' ? '♀' : '♂' }}</span>
-                          </el-option>
-                        </el-select>
-                      </el-form-item>
-                      <el-form-item label="台词内容">
-                        <el-input
-                          v-model="ttsForm.text"
-                          type="textarea"
-                          :rows="3"
-                          placeholder="请输入角色台词..."
-                          maxlength="500"
-                          show-word-limit
-                        />
-                      </el-form-item>
-                      <el-form-item label="音量">
-                        <el-slider 
-                          v-model="ttsForm.volume" 
-                          :min="0" 
-                          :max="1" 
-                          :step="0.1"
-                          :format-tooltip="(val) => Math.round(val * 100) + '%'"
-                        />
-                      </el-form-item>
-                      <el-form-item label="语速">
-                        <el-slider 
-                          v-model="ttsForm.speed" 
-                          :min="0.5" 
-                          :max="2" 
-                          :step="0.1"
-                          :format-tooltip="(val) => val.toFixed(1) + 'x'"
-                        />
-                      </el-form-item>
-                      <el-form-item>
-                        <el-button type="primary" :loading="ttsLoading" @click="handleGenerateTTS">
-                          <el-icon><Microphone /></el-icon>
-                          生成配音
-                        </el-button>
-                        <el-button @click="handlePreviewTTS" :disabled="!ttsForm.text">
-                          <el-icon><VideoPlay /></el-icon>
-                          试听
-                        </el-button>
-                      </el-form-item>
-                    </el-form>
+                  <div class="tts-container">
+                    <!-- 子Tab切换 -->
+                    <el-tabs v-model="voiceTab" class="voice-sub-tabs">
+                      <!-- 镜头配音 -->
+                      <el-tab-pane label="镜头配音" name="shots">
+                        <div class="voice-section">
+                          <!-- 配音设置区 -->
+                          <div class="voice-settings">
+                            <el-form label-width="80px" class="tts-form">
+                              <el-form-item label="选择音色">
+                                <el-select v-model="ttsForm.voiceId" placeholder="请选择音色" style="width: 100%">
+                                  <el-option-group label="女声">
+                                    <el-option
+                                      v-for="voice in voiceList.filter(v => v.gender === 'female')"
+                                      :key="voice.id"
+                                      :label="voice.name"
+                                      :value="voice.id"
+                                    >
+                                      <span>{{ voice.name }}</span>
+                                      <span class="voice-desc">{{ voice.description || voice.style }}</span>
+                                    </el-option>
+                                  </el-option-group>
+                                  <el-option-group label="男声">
+                                    <el-option
+                                      v-for="voice in voiceList.filter(v => v.gender === 'male')"
+                                      :key="voice.id"
+                                      :label="voice.name"
+                                      :value="voice.id"
+                                    >
+                                      <span>{{ voice.name }}</span>
+                                      <span class="voice-desc">{{ voice.description || voice.style }}</span>
+                                    </el-option>
+                                  </el-option-group>
+                                </el-select>
+                              </el-form-item>
+                              <el-form-item>
+                                <el-button type="primary" :loading="batchTTSLoading" @click="handleBatchTTS">
+                                  <el-icon><Microphone /></el-icon>
+                                  批量生成配音
+                                </el-button>
+                                <el-button @click="loadShotAudioStatus">
+                                  <el-icon><Refresh /></el-icon>
+                                  刷新状态
+                                </el-button>
+                              </el-form-item>
+                            </el-form>
+                          </div>
+                          
+                          <!-- 镜头配音列表 -->
+                          <div class="shot-audio-list" v-loading="loadingShotAudio">
+                            <div class="list-header">
+                              <span class="header-title">镜头配音列表</span>
+                              <span class="header-count">共 {{ shotAudioList.length }} 个镜头，{{ shotAudioList.filter(s => s.audio_url).length }} 个已配音</span>
+                            </div>
+                            <div class="list-content">
+                              <div v-for="shot in shotAudioList" :key="shot.id" class="shot-audio-item">
+                                <div class="shot-info">
+                                  <span class="shot-number">{{ shot.shot_number }}</span>
+                                  <div class="shot-detail">
+                                    <span class="character-name">{{ shot.character_name || '未分配角色' }}</span>
+                                    <span class="dialogue-preview">{{ (shot.dialogue || shot.original_text || '无台词').substring(0, 30) }}...</span>
+                                  </div>
+                                </div>
+                                <div class="shot-voice">
+                                  <el-tag v-if="shot.voice_name" size="small" type="info">{{ shot.voice_name }}</el-tag>
+                                  <el-tag v-if="shot.tts_status === 'completed'" type="success" size="small">已生成</el-tag>
+                                  <el-tag v-else-if="shot.tts_status === 'generating'" type="warning" size="small">生成中</el-tag>
+                                  <el-tag v-else-if="shot.tts_status === 'failed'" type="danger" size="small">失败</el-tag>
+                                  <el-tag v-else size="small">未生成</el-tag>
+                                </div>
+                                <div class="shot-actions">
+                                  <el-button 
+                                    size="small" 
+                                    :type="currentPlayingShot === shot.id ? 'success' : 'primary'" 
+                                    plain
+                                    :disabled="!shot.audio_url"
+                                    @click="handlePlayShotAudio(shot)"
+                                  >
+                                    <el-icon><VideoPlay v-if="currentPlayingShot !== shot.id" /><Close v-else /></el-icon>
+                                    {{ currentPlayingShot === shot.id ? '停止' : '播放' }}
+                                  </el-button>
+                                  <el-button 
+                                    size="small" 
+                                    type="primary" 
+                                    plain
+                                    :disabled="!shot.dialogue && !shot.original_text"
+                                    @click="handleShotTTS(shot)"
+                                  >
+                                    <el-icon><Microphone /></el-icon>
+                                    生成
+                                  </el-button>
+                                  <el-button 
+                                    size="small" 
+                                    type="danger" 
+                                    plain
+                                    :disabled="!shot.audio_url"
+                                    @click="handleDeleteShotAudio(shot)"
+                                  >
+                                    <el-icon><Delete /></el-icon>
+                                  </el-button>
+                                </div>
+                              </div>
+                              <el-empty v-if="shotAudioList.length === 0 && !loadingShotAudio" description="暂无镜头数据" />
+                            </div>
+                          </div>
+                        </div>
+                      </el-tab-pane>
+                      
+                      <!-- 角色音色绑定 -->
+                      <el-tab-pane label="角色音色" name="characters">
+                        <div class="voice-section">
+                          <div class="list-header">
+                            <span class="header-title">角色音色绑定</span>
+                            <span class="header-count">为每个角色设置默认音色，配音时自动使用</span>
+                          </div>
+                          <div class="character-voice-list">
+                            <div v-for="char in characters" :key="char.id" class="character-voice-item">
+                              <div class="character-info">
+                                <el-avatar :size="40" :src="char.image_url">{{ char.name?.charAt(0) }}</el-avatar>
+                                <div class="character-detail">
+                                  <span class="character-name">{{ char.name }}</span>
+                                  <span class="character-desc">{{ char.description || '暂无描述' }}</span>
+                                </div>
+                              </div>
+                              <div class="character-voice-select">
+                                <el-select 
+                                  :model-value="char.default_voice_id || ''"
+                                  placeholder="选择默认音色"
+                                  style="width: 200px"
+                                  @change="(voiceId) => handleVoiceChange(char, voiceId)"
+                                >
+                                  <el-option-group label="女声">
+                                    <el-option
+                                      v-for="voice in voiceList.filter(v => v.gender === 'female')"
+                                      :key="voice.id"
+                                      :label="voice.name"
+                                      :value="voice.id"
+                                    >
+                                      <span>{{ voice.name }}</span>
+                                      <span class="voice-desc">{{ voice.description || voice.style }}</span>
+                                    </el-option>
+                                  </el-option-group>
+                                  <el-option-group label="男声">
+                                    <el-option
+                                      v-for="voice in voiceList.filter(v => v.gender === 'male')"
+                                      :key="voice.id"
+                                      :label="voice.name"
+                                      :value="voice.id"
+                                    >
+                                      <span>{{ voice.name }}</span>
+                                      <span class="voice-desc">{{ voice.description || voice.style }}</span>
+                                    </el-option>
+                                  </el-option-group>
+                                </el-select>
+                                <el-tag v-if="char.default_voice_name" type="success" size="small">
+                                  {{ char.default_voice_name }}
+                                </el-tag>
+                              </div>
+                            </div>
+                            <el-empty v-if="characters.length === 0" description="暂无角色，请先创建角色" />
+                          </div>
+                        </div>
+                      </el-tab-pane>
+                    </el-tabs>
                   </div>
                 </el-tab-pane>
                 
@@ -1615,6 +1725,7 @@ import {
   userAPI,
   projectsAPI,
   imagesAPI,
+  ttsAPI,
   getAssetUrl
 } from '../api/index'
 import {
@@ -1650,6 +1761,7 @@ import {
   ArrowLeft,
   ArrowUp,
   ArrowDown,
+  Refresh,
 } from '@element-plus/icons-vue'
 
 const props = defineProps({
@@ -2079,6 +2191,208 @@ const sfxLoading = ref(false)
 const loadingSFX = ref(false)
 const audioPlayer = ref(null)
 
+// ==================== 镜头配音相关 ====================
+// 配音管理相关状态
+const voiceTab = ref('shots') // shots: 镜头配音, characters: 角色音色绑定
+const shotAudioList = ref([]) // 剧本下所有镜头的配音状态
+const loadingShotAudio = ref(false)
+const batchTTSLoading = ref(false)
+const selectedShotsForTTS = ref([]) // 选中的镜头列表
+const currentPlayingShot = ref(null) // 当前正在播放的镜头
+const audioPreviewRef = ref(null) // 音频预览引用
+
+// 加载剧本下所有镜头的配音状态
+const loadShotAudioStatus = async () => {
+  if (!currentScriptId.value) return
+  loadingShotAudio.value = true
+  try {
+    const res = await ttsAPI.getStatus(currentScriptId.value)
+    if (res.success) {
+      shotAudioList.value = res.data
+    }
+  } catch (err) {
+    console.error('加载配音状态失败:', err)
+  } finally {
+    loadingShotAudio.value = false
+  }
+}
+
+// 为单个镜头生成配音
+const handleShotTTS = async (shot) => {
+  if (!shot.dialogue && !shot.original_text) {
+    ElMessage.warning('该镜头没有台词')
+    return
+  }
+  try {
+    const res = await ttsAPI.generate({
+      shotId: shot.id,
+      voice: ttsForm.voiceId || 'zh-CN-XiaoxiaoNeural'
+    })
+    if (res.success) {
+      ElMessage.success('配音生成成功')
+      await loadShotAudioStatus()
+      // 更新当前选中镜头的配音信息
+      if (currentShot.value && currentShot.value.id === shot.id) {
+        currentShot.value.audio_url = res.data.audioUrl
+        currentShot.value.voice_id = res.data.voice
+        currentShot.value.voice_name = res.data.voiceName
+      }
+    }
+  } catch (err) {
+    console.error('生成配音失败:', err)
+    ElMessage.error('生成配音失败: ' + (err.message || '未知错误'))
+  }
+}
+
+// 批量生成配音
+const handleBatchTTS = async () => {
+  if (!currentScriptId.value) {
+    ElMessage.warning('请先选择一个剧本')
+    return
+  }
+  
+  // 获取所有有台词的镜头
+  const shotsWithDialogue = shotAudioList.value.filter(s => 
+    s.dialogue || s.original_text
+  )
+  
+  if (shotsWithDialogue.length === 0) {
+    ElMessage.warning('当前剧本没有需要配音的镜头')
+    return
+  }
+
+  batchTTSLoading.value = true
+  try {
+    const res = await ttsAPI.generateBatch({
+      scriptId: currentScriptId.value,
+      voice: ttsForm.voiceId || 'zh-CN-XiaoxiaoNeural'
+    })
+    if (res.success) {
+      ElMessage.success(res.message || `批量生成完成：成功${res.data.success}个，失败${res.data.failed}个`)
+      await loadShotAudioStatus()
+    }
+  } catch (err) {
+    console.error('批量生成配音失败:', err)
+    ElMessage.error('批量生成失败: ' + (err.message || '未知错误'))
+  } finally {
+    batchTTSLoading.value = false
+  }
+}
+
+// 删除镜头配音
+const handleDeleteShotAudio = async (shot) => {
+  if (!shot.audio_url) {
+    ElMessage.warning('该镜头没有配音')
+    return
+  }
+  try {
+    await ElMessageBox.confirm(`确定删除镜头 ${shot.shot_number} 的配音吗？`, '删除确认', { type: 'warning' })
+    const res = await ttsAPI.remove(shot.id)
+    if (res.success) {
+      ElMessage.success('配音已删除')
+      await loadShotAudioStatus()
+      // 更新当前选中镜头的配音信息
+      if (currentShot.value && currentShot.value.id === shot.id) {
+        currentShot.value.audio_url = null
+        currentShot.value.voice_id = null
+        currentShot.value.voice_name = null
+      }
+    }
+  } catch (err) {
+    if (err !== 'cancel') {
+      console.error('删除配音失败:', err)
+      ElMessage.error('删除失败')
+    }
+  }
+}
+
+// 播放/停止配音预览
+const handlePlayShotAudio = (shot) => {
+  if (!shot.audio_url) {
+    ElMessage.warning('该镜头没有配音')
+    return
+  }
+  
+  // 如果正在播放同一个镜头，则停止
+  if (currentPlayingShot.value === shot.id && audioPreviewRef.value) {
+    audioPreviewRef.value.pause()
+    audioPreviewRef.value.currentTime = 0
+    currentPlayingShot.value = null
+    return
+  }
+  
+  // 停止之前的播放
+  if (audioPreviewRef.value) {
+    audioPreviewRef.value.pause()
+    audioPreviewRef.value = null
+  }
+  
+  // 创建新的音频实例并播放
+  const audio = new Audio(getAssetUrl(shot.audio_url))
+  audioPreviewRef.value = audio
+  currentPlayingShot.value = shot.id
+  
+  audio.play()
+  audio.onended = () => {
+    currentPlayingShot.value = null
+  }
+  audio.onerror = () => {
+    ElMessage.error('音频播放失败')
+    currentPlayingShot.value = null
+  }
+}
+
+// 更新角色默认音色绑定
+const handleVoiceChange = async (character, voiceId) => {
+  if (!voiceId) return
+  try {
+    // 根据voiceId查找voiceName
+    const voice = voiceList.value.find(v => v.id === voiceId)
+    const voiceName = voice ? voice.name : voiceId
+    const res = await ttsAPI.updateCharacterVoice({
+      characterId: character.id,
+      voiceId,
+      voiceName
+    })
+    if (res.success) {
+      ElMessage.success('音色绑定成功')
+      await loadCharacters()
+    }
+  } catch (err) {
+    console.error('更新角色音色失败:', err)
+    ElMessage.error('绑定失败: ' + (err.message || '未知错误'))
+  }
+}
+
+// 兼容旧函数名
+const handleUpdateCharacterVoice = handleVoiceChange
+
+// 监听音频Tab切换，加载配音状态
+watch(audioTab, (newTab) => {
+  if (newTab === 'tts') {
+    loadAudioSettings()
+    if (currentScriptId.value) {
+      loadShotAudioStatus()
+    }
+  }
+})
+
+// 加载音频相关设置（音色列表等）
+const loadAudioSettings = async () => {
+  try {
+    const res = await ttsAPI.getVoices()
+    if (res.success) {
+      voiceList.value = res.data
+      // 如果没有选中音色，默认选择第一个
+      if (!ttsForm.voiceId && voiceList.value.length > 0) {
+        ttsForm.voiceId = voiceList.value[0].id
+      }
+    }
+  } catch (err) {
+    console.error('加载音色列表失败:', err)
+  }
+}
+
 const filteredBGMList = computed(() => {
   if (!bgmCategory.value) return bgmList.value
   return bgmList.value.filter(b => b.category === bgmCategory.value)
@@ -2096,6 +2410,7 @@ onMounted(() => {
   }
   userStore.fetchMembership()
   userStore.fetchCredits()
+  loadAudioSettings() // 加载配音音色列表
 })
 
 // 监听来自右侧面板的详情查看信号
@@ -6043,3 +6358,200 @@ const handleMoveShot = async (scene, shot, direction) => {
   margin-right: 8px;
 }
 
+
+/* v5.2 TTS配音系统样式 */
+.tts-container {
+  padding: 16px;
+}
+
+.voice-sub-tabs {
+  margin-top: 16px;
+}
+
+.voice-section {
+  padding: 16px 0;
+}
+
+.voice-settings {
+  background: #f5f7fa;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.voice-settings .tts-form {
+  max-width: 400px;
+}
+
+/* 镜头配音列表样式 */
+.shot-audio-list {
+  margin-top: 16px;
+}
+
+.list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #eee;
+}
+
+.header-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: #303133;
+}
+
+.header-count {
+  font-size: 12px;
+  color: #909399;
+}
+
+.list-content {
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.shot-audio-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px;
+  border: 1px solid #e4e7ed;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  transition: all 0.3s;
+}
+
+.shot-audio-item:hover {
+  background: #f5f7fa;
+  border-color: #409eff;
+}
+
+.shot-info {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+}
+
+.shot-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: #409eff;
+  color: #fff;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 600;
+  margin-right: 12px;
+  flex-shrink: 0;
+}
+
+.shot-detail {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.shot-detail .character-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #303133;
+  margin-bottom: 4px;
+}
+
+.shot-detail .dialogue-preview {
+  font-size: 12px;
+  color: #909399;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.shot-voice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 16px;
+}
+
+.shot-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* 角色音色绑定样式 */
+.character-voice-list {
+  padding: 8px 0;
+}
+
+.character-voice-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  border: 1px solid #e4e7ed;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  transition: all 0.3s;
+}
+
+.character-voice-item:hover {
+  background: #f5f7fa;
+  border-color: #409eff;
+}
+
+.character-info {
+  display: flex;
+  align-items: center;
+  flex: 1;
+}
+
+.character-info .el-avatar {
+  margin-right: 12px;
+}
+
+.character-detail {
+  display: flex;
+  flex-direction: column;
+}
+
+.character-detail .character-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #303133;
+  margin-bottom: 4px;
+}
+
+.character-detail .character-desc {
+  font-size: 12px;
+  color: #909399;
+  max-width: 200px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.character-voice-select {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* 音色选项样式 */
+.voice-desc {
+  margin-left: 8px;
+  font-size: 12px;
+  color: #909399;
+}
+
+/* 批量操作按钮样式 */
+.batch-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}

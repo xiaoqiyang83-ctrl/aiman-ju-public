@@ -99,6 +99,8 @@ app.use('/api/versions', require('./routes/versions'));
 app.use('/api/videos', require('./routes/videos'));
 // ==================== 图像生成API ====================
 app.use('/api/images', require('./routes/images'));
+// ==================== TTS配音API ====================
+app.use('/api/tts', require('./routes/tts'));
 // 404处理
 app.use('/api/*', (req, res) => {
   res.status(404).json({ success: false, message: '接口不存在' });
