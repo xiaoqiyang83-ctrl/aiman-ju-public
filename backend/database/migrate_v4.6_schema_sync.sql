@@ -37,3 +37,24 @@ UPDATE exports
 SET file_path = file_url
 WHERE file_path IS NULL AND file_url IS NOT NULL;
 
+-- ===== shots =====
+ALTER TABLE shots ADD COLUMN IF NOT EXISTS visual_prompt TEXT DEFAULT '';
+ALTER TABLE shots ADD COLUMN IF NOT EXISTS original_text TEXT DEFAULT '';
+
+-- widen for movement labels if needed (idempotent)
+ALTER TABLE shots ALTER COLUMN camera_movement TYPE VARCHAR(50);
+
+-- backfill (do not overwrite existing values)
+UPDATE shots
+SET visual_prompt = COALESCE(NULLIF(visual_prompt, ''), NULLIF(visual_description, ''), '')
+WHERE visual_prompt IS NULL OR visual_prompt = '';
+
+UPDATE shots
+SET original_text = COALESCE(
+  NULLIF(original_text, ''),
+  NULLIF(dialogue, ''),
+  NULLIF(action_description, ''),
+  NULLIF(visual_description, ''),
+  ''
+)
+WHERE original_text IS NULL OR original_text = '';
