@@ -233,16 +233,16 @@ const storageColor = computed(() => {
 .sidebar-logo {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 14px 12px;
+  gap: 6px;
+  padding: 10px 8px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .logo-icon {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   background: linear-gradient(135deg, #409eff 0%, #53a8ff 100%);
-  border-radius: 8px;
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -251,7 +251,7 @@ const storageColor = computed(() => {
 
 .logo-icon-text {
   color: white;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: bold;
 }
 
@@ -263,14 +263,14 @@ const storageColor = computed(() => {
 
 .logo-title {
   color: white;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
 }
 
 .logo-subtitle {
   color: #a0a9c4;
-  font-size: 9px;
+  font-size: 8px;
   white-space: nowrap;
 }
 
@@ -291,24 +291,24 @@ const storageColor = computed(() => {
 }
 
 .menu-section {
-  padding: 4px 0;
+  padding: 2px 0;
 }
 
 .menu-section-title {
-  padding: 6px 12px;
-  font-size: 10px;
+  padding: 4px 8px;
+  font-size: 9px;
   color: #606885;
   text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 0.5px;
 }
 
 .sidebar-menu :deep(.el-menu-item) {
-  height: 38px;
-  line-height: 38px;
-  margin: 1px 6px;
-  padding: 0 12px !important;
-  font-size: 13px;
-  border-radius: 6px;
+  height: 34px;
+  line-height: 34px;
+  margin: 1px 4px;
+  padding: 0 8px !important;
+  font-size: 12px;
+  border-radius: 5px;
 }
 
 .sidebar-menu :deep(.el-menu-item:hover) {

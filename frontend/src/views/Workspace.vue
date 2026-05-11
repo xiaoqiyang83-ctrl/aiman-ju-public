@@ -4508,8 +4508,9 @@ const handleMoveShot = async (scene, shot, direction) => {
 /* 项目概览卡片 */
 .overview-card {
   border-radius: 12px;
-  border: 2px solid #d0d5dd;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  border: 3px solid #b8bfc9;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  background: #ffffff;
 }
 
 .project-overview {
@@ -4626,10 +4627,10 @@ const handleMoveShot = async (scene, shot, direction) => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: 14px 8px;
+  gap: 5px;
+  padding: 12px 6px;
   background: #f5f7fa;
-  border: 2px solid #e8ecf1;
+  border: 2px solid #d5dae0;
   border-radius: 10px;
   cursor: pointer;
   transition: all 0.2s;
@@ -4639,7 +4640,7 @@ const handleMoveShot = async (scene, shot, direction) => {
   background: #e8f3ff;
   border-color: #409eff;
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.15);
+  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.2);
 }
 
 .op-icon {
@@ -4692,10 +4693,10 @@ const handleMoveShot = async (scene, shot, direction) => {
   flex-direction: column;
   background: #ffffff;
   border-radius: 12px;
-  border: 2px solid #d0d5dd;
+  border: 3px solid #b8bfc9;
   overflow-y: auto;
   min-height: 0;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
 }
 
 .tab-content.storyboard-content {
@@ -4968,15 +4969,15 @@ const handleMoveShot = async (scene, shot, direction) => {
   background: #fff;
   border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
   transition: all 0.3s ease;
   width: 100%;
   margin-bottom: 20px;
-  border: 2px solid #c8d0db;
+  border: 3px solid #a8afba;
 }
 
 .scene-card-enhanced:hover {
-  box-shadow: 0 8px 32px rgba(64, 158, 255, 0.2);
+  box-shadow: 0 12px 36px rgba(64, 158, 255, 0.25);
   border-color: #409eff;
 }
 
