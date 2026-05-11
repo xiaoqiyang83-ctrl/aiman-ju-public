@@ -591,18 +591,36 @@ function extractDialoguesFromSceneContent(content) {
     const dialogues = [];
     const lines = t.split('\n').map(s => s.trim()).filter(Boolean);
     for (const line of lines) {
-        if (/^人物[：:]/.test(line)) continue;
-        const m = line.match(/^(.{1,16}?)(?:\s*\(([^)]+)\))?\s*(VO|OS)?\s*[：:]\s*(.+)$/i);
-        if (m) {
-            const rhs = String(m[4] || '').trim();
-            if (rhs) dialogues.push(rhs);
+        if (/^(人物|场景|地点|时间|道具|备注|场次)[：:]/.test(line)) continue;
+        if (/^(第.{1,3}集|第.{1,3}场)/.test(line)) continue;
+        // 格式1: 角色：台词 / 角色: 台词 (含括号标注如"队长（惊喜）：")
+        const m1 = line.match(/^(.{1,16}?)(?:\s*[（(]([^)）]+)[)）])?\s*(VO|OS)?\s*[：:]\s*(.+)$/i);
+        if (m1) {
+            const rhs = String(m1[4] || '').trim();
+            if (rhs && rhs.length < 200) dialogues.push(rhs);
+            continue;
+        }
+        // 格式2: 【角色】台词
+        const m2 = line.match(/^【(.{1,16}?)】\s*(.+)$/);
+        if (m2) {
+            const rhs = String(m2[2] || '').trim();
+            if (rhs && rhs.length < 200) dialogues.push(rhs);
+            continue;
+        }
+        // 格式3: 角色名 台词（2个以上空格分隔）
+        const m3 = line.match(/^([\u4e00-\u9fa5]{1,8})\s{2,}(.+)$/);
+        if (m3 && !/^(旁白|画外音|动作|场景|说明)/.test(m3[1])) {
+            const rhs = String(m3[2] || '').trim();
+            if (rhs && rhs.length < 200 && /[\u4e00-\u9fa5]/.test(rhs)) dialogues.push(rhs);
+            continue;
         }
     }
     if (dialogues.length) return dialogues;
-    const quotes = String(t || '').match(/“([^”]+)”|「([^」]+)」|"([^"]+)"/g) || [];
+    // Fallback: extract from Chinese/English quotes
+    const quotes = String(t || '').match(/“([^”]+)”|「([^」]+)」|"([^"]+)"|‘([^’]+)’/g) || [];
     for (const q of quotes) {
-        const inner = q.replace(/^["“「]/, '').replace(/["”」]$/, '').trim();
-        if (inner) dialogues.push(inner);
+        const inner = q.replace(/^[\"“「‘]/, '').replace(/[\"”」’]$/, '').trim();
+        if (inner && inner.length >= 2 && inner.length < 200) dialogues.push(inner);
     }
     return dialogues;
 }
@@ -687,37 +705,66 @@ function assignDialoguesToShots(scene, shots) {
     const extracted = extractDialoguesFromSceneContent(scene?.content || '');
     const speakers = extractSpeakersFromSceneContent(scene?.content || '');
     const nonEmptyDialogueCount = list.filter(s => String(s.dialogue || '').trim()).length;
+    // If model already assigned dialogues well, trust it
+    if (nonEmptyDialogueCount >= extracted.length && nonEmptyDialogueCount > 0) return list;
     if (!extracted.length && nonEmptyDialogueCount) return list;
+
     if (!extracted.length) {
+        // Try to extract from original_text of each shot
         for (let i = 0; i < list.length; i++) {
             const orig = String(list[i].original_text || '').trim();
             if (!orig) list[i].original_text = String(scene?.content || '').trim();
             if (!String(list[i].dialogue || '').trim()) {
-                list[i].dialogue = '';
-                list[i].action_description = list[i].action_description || list[i].original_text || '';
+                // Try extracting from quotes in original_text
+                const quotedMatch = String(orig).match(/“([^”]+)”|「([^」]+)」|"([^"]+)"/);
+                if (quotedMatch) {
+                    const d = (quotedMatch[1] || quotedMatch[2] || quotedMatch[3] || '').trim();
+                    if (d) list[i].dialogue = d;
+                }
+                // Try 角色：台词 in original_text
+                if (!list[i].dialogue) {
+                    const colonMatch = String(orig).match(/[\u4e00-\u9fa5]{1,8}[：:]\s*(.+)$/);
+                    if (colonMatch) list[i].dialogue = String(colonMatch[1] || '').trim();
+                }
+                if (!list[i].dialogue) {
+                    list[i].dialogue = '';
+                    list[i].action_description = list[i].action_description || orig || '';
+                }
             }
         }
         return list;
     }
 
-    const usable = extracted.slice(0, list.length);
+    // Distribute extracted dialogues to shots that don't have one
+    let dIdx = 0;
     for (let i = 0; i < list.length; i++) {
-        const d = usable[i] || usable[usable.length - 1];
-        if (!String(list[i].dialogue || '').trim()) list[i].dialogue = d || '';
-        if (!String(list[i].original_text || '').trim()) list[i].original_text = d || String(scene?.content || '').trim();
+        if (!String(list[i].dialogue || '').trim() && dIdx < extracted.length) {
+            list[i].dialogue = extracted[dIdx] || '';
+            dIdx++;
+        }
+        if (!String(list[i].original_text || '').trim()) {
+            list[i].original_text = String(list[i].dialogue || scene?.content || '').trim();
+        }
         if (!String(list[i].action_description || '').trim()) {
             const orig = String(list[i].original_text || '').trim();
-            list[i].action_description = orig.replace(/“[^”]+”|「[^」]+」|"[^"]+"/g, '').trim();
+            list[i].action_description = orig.replace(/“[^”]+”|「[^」]+」|"([^"]+)"/g, '').trim();
         }
+    }
+    // If more dialogues than shots, append to last shot
+    while (dIdx < extracted.length) {
+        const lastShot = list[list.length - 1];
+        if (lastShot) {
+            lastShot.dialogue = lastShot.dialogue ? lastShot.dialogue + '\uFF1B' + extracted[dIdx] : extracted[dIdx];
+        }
+        dIdx++;
     }
 
     const anyDialogue = list.some(s => String(s.dialogue || '').trim());
-    if (!anyDialogue) {
-        list[0].dialogue = usable[0] || '';
+    if (!anyDialogue && extracted.length) {
+        list[0].dialogue = extracted[0] || '';
     }
     return list;
 }
-
 function ensureDialogueCoverage(scene, shots) {
     const list = Array.isArray(shots) ? shots.map(s => ({ ...s })) : [];
     const extracted = extractDialoguesFromSceneContent(scene?.content || '');
@@ -825,13 +872,55 @@ async function generateStoryboardFromScript({ title, content }) {
         throw new Error('未配置可用的大模型接口。请在 backend/.env 按 backend/.env.example 添加：AI_PROVIDER=openai-compatible、AI_API_KEY、AI_BASE_URL、AI_MODEL（推荐），然后重试上传。');
     }
 
-    const system = `你是资深漫剧导演 + 分镜师。把用户提供的“漫剧剧本原文”拆成“场景列表 + 每场景镜头列表”。你只输出结构化JSON，不要任何解释性文字。输出必须满足：\n1) 景别有明显变化，优先序列：远景→全景→中景→近景→特写（必要时可插入大特写），不要全是特写。\n2) 运镜有变化，允许值仅：固定/推镜头/拉镜头/移镜头/摇镜头，不要全是固定。\n3) 对话/旁白必须分配到对应镜头 dialogue，不允许整场景 dialogue 全空。\n4) visual_prompt 必须包含：地点+人物+动作+表情/情绪+关键物件（如有）+光影+氛围（必须写出光影和氛围）。\n5) 禁止重复镜头（同台词或同原文片段 + 画面描述高度相似 视为重复）。\n6) 禁止第二人称叙述：visual_prompt 不允许出现“你/你们/和你/与你/我们和你”等词，必须用具体角色名。`;
+        const system = `你是资深漫剧导演+分镜师。把用户提供的漫剧剧本原文拆成场景列表+每场景镜头列表。你只输出JSON，不要任何解释。
 
-    const user = `请把下面剧本拆成结构化JSON。\n\n【输出JSON Schema】\n{\n  \"scenes\": [\n    {\n      \"episode\": \"1\",\n      \"scene_number\": \"1-5\",\n      \"title\": \"农场-菜地\",\n      \"location\": \"农场-菜地\",\n      \"time_of_day\": \"日外\",\n      \"characters\": [\"队长\",\"队员甲\",\"队员乙\"],\n      \"content\": \"该场景原文（可包含场次行/人物行/动作行/台词行）\",\n      \"shots\": [\n        {\n          \"shot_number\": 1,\n          \"shot_type\": \"远景|全景|中景|近景|特写|大特写\",\n          \"camera_movement\": \"固定|推镜头|拉镜头|移镜头|摇镜头\",\n          \"duration\": 4,\n          \"visual_prompt\": \"具体可拍的画面描述（必须写光影与氛围）：地点+人物+动作+表情/情绪+关键物件+光影+氛围\",\n          \"original_text\": \"该镜头对应的原文片段（含对白/旁白/动作）\",\n          \"dialogue\": \"该镜头的台词/旁白（如无则空字符串）\",\n          \"action_description\": \"该镜头的动作/舞台说明（如无则空字符串）\"\n        }\n      ]\n    }\n  ]\n}\n\n【强制约束】\n- 景别必须有变化：至少包含 远景/全景/中景/近景/特写 中的 4 种。\n- 运镜必须有变化：至少包含 固定/推镜头/移镜头 中的 2 种。\n- 对话场景：每句台词都必须出现在某个镜头 dialogue；不要把所有台词堆在一个镜头。\n- 禁止重复镜头：不要出现仅换同义词的重复画面描述。\n\n【剧本标题】${scriptTitle}\n\n【剧本原文】\n${scriptContent}\n`;
+【关键规则】
+1. dialogue字段最重要：每句台词/旁白都必须写入对应镜头的dialogue字段，绝对不能留空。纯动作镜头dialogue写空字符串""。
+2. 景别必须有变化：远景→全景→中景→近景→特写交替使用，不要全是特写或全景。
+3. 运镜必须有变化：固定/推镜头/拉镜头/移镜头/摇镜头交替使用，不要全是固定。
+4. visual_prompt必须具体可拍：必须包含地点+人物名+具体动作+表情情绪+光影+氛围，不要写模板化描述。
+5. 禁止第二人称：visual_prompt中不允许出现"你/你们/和你"等词，必须用具体角色名。
+6. 禁止重复镜头。
+
+【范例】
+输入剧本片段：
+农场-温室，日外。队长看着枯萎的番茄，队员甲跑来。
+队长：完了，这批番茄全完了。
+队员甲：队长！北边发现了活株！
+队长（惊喜）：真的？快带我去！
+
+输出JSON：
+{
+  "scenes": [{
+    "episode": "1",
+    "scene_number": "1",
+    "title": "农场-温室",
+    "location": "农场-温室内部",
+    "time_of_day": "日外",
+    "characters": ["队长", "队员甲"],
+    "content": "农场-温室，日外。队长看着枯萎的番茄，队员甲跑来。\n队长：完了，这批番茄全完了。\n队员甲：队长！北边发现了活株！\n队长（惊喜）：真的？快带我去！",
+    "shots": [
+      {"shot_number":1,"shot_type":"全景","camera_movement":"摇镜头","duration":4,"visual_prompt":"全景，农场温室内部，枯萎番茄藤蔓蔓延整个画面，队长站在田垄间低头审视，光影：顶棚透过的强光照射枯叶，氛围：压抑绝望","original_text":"农场-温室，日外。队长看着枯萎的番茄","dialogue":"","action_description":"队长审视枯萎番茄"},
+      {"shot_number":2,"shot_type":"近景","camera_movement":"推镜头","duration":3,"visual_prompt":"近景，队长面部特写，眉头紧锁眼神沮丧，手中枯叶掉落，光影：侧面强光勾勒面部轮廓，氛围：沉重无奈","original_text":"队长：完了，这批番茄全完了。","dialogue":"完了，这批番茄全完了。","action_description":"队长沮丧地说"},
+      {"shot_number":3,"shot_type":"中景","camera_movement":"移镜头","duration":3,"visual_prompt":"中景，队员甲从远处跑来，喘着气表情激动，背景温室门框，光影：逆光剪影效果，氛围：紧张转期待","original_text":"队员甲跑来\n队员甲：队长！北边发现了活株！","dialogue":"队长！北边发现了活株！","action_description":"队员甲跑来报告"},
+      {"shot_number":4,"shot_type":"特写","camera_movement":"固定","duration":3,"visual_prompt":"特写，队长眼睛瞬间睁大，瞳孔中映出队员甲的身影，嘴角微扬，光影：眼神中映出希望之光，氛围：惊喜爆发","original_text":"队长（惊喜）：真的？快带我去！","dialogue":"真的？快带我去！","action_description":"队长惊喜反应"},
+      {"shot_number":5,"shot_type":"远景","camera_movement":"拉镜头","duration":4,"visual_prompt":"远景，两人一前一后奔出温室大门，奔向远方的北面田野，光影：阳光洒在奔跑的身影上，氛围：充满希望与紧迫感","original_text":"队长和队员甲奔向北面","dialogue":"","action_description":"两人奔出温室"}
+    ]
+  }]
+}
+
+注意：上面范例中有2个镜头dialogue为空（纯动作镜头），3个镜头有台词。每个有台词的镜头，dialogue都写入了台词内容。这就是你要遵循的格式。`;
+
+    const user = `请严格参照上面的范例格式，把下面剧本拆成JSON。特别注意：每句台词必须写入对应镜头的dialogue字段，不能留空！
+
+【剧本标题】${scriptTitle}
+
+【剧本原文】
+${scriptContent}`;
 
     let result;
     try {
-        result = await generateTextWithProvider(provider, { system, user, temperature: 0.2, maxTokens: 5000, enableRetry: true });
+        result = await generateTextWithProvider(provider, { system, user, temperature: 0.3, maxTokens: 8000, enableRetry: true });
     } catch (e) {
         const msg = String(e?.message || '');
         if (provider === 'ernie' && /client_id|client id|invalid|无效/i.test(msg)) {
