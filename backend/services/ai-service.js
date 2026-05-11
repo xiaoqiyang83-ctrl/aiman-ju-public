@@ -355,7 +355,7 @@ const generateText = async ({
             }))
         }));
 
-        const url = new URL('/chat/completions', config.baseURL);
+        const url = config.baseURL.replace(/\/$/, '') + '/chat/completions';
         const response = await fetchJson(url.toString(), {
             method: 'POST',
             headers: {
@@ -424,7 +424,7 @@ const generateTextWithProvider = async (provider, { system, user, temperature = 
             max_tokens: maxTokens,
         };
 
-        const url = new URL('/chat/completions', config.baseURL);
+        const url = config.baseURL.replace(/\/$/, '') + '/chat/completions';
         const response = await fetchJson(url.toString(), {
             method: 'POST',
             headers: {
