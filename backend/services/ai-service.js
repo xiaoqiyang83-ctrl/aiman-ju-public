@@ -459,539 +459,364 @@ const generateTextWithProvider = async (provider, { system, user, temperature = 
     return enableRetry ? await withRetry(requestFn) : await requestFn();
 };
 
-function extractFirstJsonObject(text) {
-    const t = String(text || '');
-    const fenced = t.match(/```json\s*([\s\S]*?)\s*```/i) || t.match(/```\s*([\s\S]*?)\s*```/);
-    let candidate = fenced ? fenced[1] : t;
-    const start = candidate.indexOf('{');
-    const end = candidate.lastIndexOf('}');
-    if (start >= 0 && end > start) {
-        candidate = candidate.slice(start, end + 1);
-        // 清理JSON字符串中的非法控制字符（裸换行/制表符等，保留合法转义的 \n \t \r \" \\）
-        candidate = candidate.replace(/[\x00-\x1f]/g, (ch) => {
-            if (ch === '\n') return '\\n';
-            if (ch === '\r') return '\\r';
-            if (ch === '\t') return '\\t';
-            return '';
-        });
-        // 额外清理：字面的反斜杠+n (不是真正的换行，而是两个字符)
-        // 把 " 这种内部换行也清理掉
-        candidate = candidate.replace(/\n/g, '\\n');
-        // 清理其他可能的非法空白（如全角空格等）
-        candidate = candidate.replace(/[\xa0\u3000]/g, ' ');
-        return candidate;
+// ==================== 分镜拆分模块（重构版 v2）====================
+// 设计参考：moyin-creator PromptCompiler 模板化思路
+// 核心改动：
+// 1. prompt模板化，system/user分离，变量注入
+// 2. 三层提示词编译（首帧/尾帧/视频）由后端拼接
+// 3. 删除5个后处理补丁函数，改为normalizeStoryboard标准化
+
+// ==================== 提示词模板 ====================
+
+const STORYBOARD_SYSTEM_PROMPT = `你是一位资深漫剧分镜师。你的任务是将剧本拆分为场景和镜头。
+
+输出规则：
+1. 严格输出JSON，不要任何解释性文字
+2. 景别必须丰富：远景/全景/中景/近景/特写至少覆盖3种
+3. 运镜必须有变化：固定/推镜头/拉镜头/移镜头/摇镜头至少2种
+4. 每句台词必须分配到对应镜头的dialogue字段
+5. visual_prompt必须包含：地点+人物动作+表情情绪+光影氛围
+6. 禁止重复镜头
+7. 禁止第二人称（你/你们），用具体角色名`;
+
+const STORYBOARD_USER_TEMPLATE = `请将以下剧本拆分为结构化JSON。
+
+【输出格式】
+{
+  "scenes": [
+    {
+      "episode": "集号",
+      "scene_number": "场号",
+      "title": "场景名称",
+      "location": "具体地点",
+      "time_of_day": "日内/夜内/日外/夜外",
+      "characters": ["出场角色名"],
+      "content": "该场景原文",
+      "shots": [
+        {
+          "shot_number": 1,
+          "shot_type": "远景|全景|中景|近景|特写",
+          "camera_movement": "固定|推镜头|拉镜头|移镜头|摇镜头",
+          "duration": 5,
+          "visual_prompt": "地点+人物+动作+表情+光影+氛围（必须写光影和氛围）",
+          "original_text": "对应原文片段",
+          "dialogue": "该镜头台词（无则空字符串）",
+          "action_description": "动作/舞台说明（无则空字符串）"
+        }
+      ]
     }
-    return '';
+  ]
 }
 
-function normalizeStoryboardJson(raw) {
-    const movementMap = {
-        static: '固定',
-        push_in: '推镜头',
-        pull_back: '拉镜头',
-        tracking: '移镜头',
-        pan: '摇镜头'
-    };
-    const shotTypeMap = {
-        wide: '远景',
-        long_shot: '远景',
-        establishing: '全景',
-        full_shot: '全景',
-        medium: '中景',
-        medium_shot: '中景',
-        close: '近景',
-        close_up: '近景',
-        extreme_close_up: '大特写',
-        ecu: '大特写'
-    };
+【强制约束】
+- 每个场景至少3个镜头，对话场景每句台词占一个镜头
+- 景别必须有变化，不要全是特写或全是远景
+- visual_prompt必须写光影和氛围，如"暖黄灯光，紧张压抑"
 
-    const obj = raw && typeof raw === 'object' ? raw : {};
-    const scenes = Array.isArray(obj.scenes) ? obj.scenes : (Array.isArray(obj.data?.scenes) ? obj.data.scenes : []);
-    const normScenes = scenes.map((s, idx) => {
-        const shots = Array.isArray(s?.shots) ? s.shots : [];
-        const normShots = shots.map((sh, j) => {
-            const shot_number = Number(sh?.shot_number || sh?.number || (j + 1)) || (j + 1);
-            const rawShotType = String(sh?.shot_type || sh?.shotType || '中景');
-            const shot_type = shotTypeMap[rawShotType] || rawShotType;
-            const rawMovement = String(sh?.camera_movement || sh?.cameraMovement || '固定');
-            const camera_movement = movementMap[rawMovement] || rawMovement;
-            const duration = Number(sh?.duration) || 4;
-            const visual_prompt = String(sh?.visual_prompt || sh?.visualPrompt || sh?.visual_description || sh?.description || '');
-            const original_text = String(sh?.original_text || sh?.originalText || sh?.text || '');
-            const dialogue = String(sh?.dialogue || sh?.line || '');
-            const action_description = String(sh?.action_description || sh?.actionDescription || '');
-            return {
-                shot_number,
-                shot_type,
-                camera_movement,
-                duration,
-                visual_prompt,
-                visual_description: visual_prompt,
-                original_text,
-                dialogue,
-                action_description
-            };
-        });
-        return {
-            episode: s?.episode ? String(s.episode) : '',
-            scene_number: s?.scene_number ? String(s.scene_number) : String(idx + 1),
-            title: String(s?.title || ''),
-            location: String(s?.location || ''),
-            time_of_day: String(s?.time_of_day || s?.timeOfDay || ''),
-            characters: Array.isArray(s?.characters) ? s.characters.map(x => String(x)).filter(Boolean) : [],
-            content: String(s?.content || s?.text || ''),
-            shots: normShots
-        };
+【剧本标题】{{title}}
+
+【剧本原文】
+{{content}}`;
+
+// ==================== 摄影预设映射表 ====================
+
+const SHOT_TYPE_MAP = {
+    '远景': { en: 'Wide Shot', promptToken: 'wide shot, establishing shot, distant view' },
+    '全景': { en: 'Long Shot', promptToken: 'long shot, full body visible' },
+    '中远景': { en: 'Medium Long Shot', promptToken: 'medium long shot, knee level' },
+    '中景': { en: 'Medium Shot', promptToken: 'medium shot, waist level' },
+    '中近景': { en: 'Medium Close-Up', promptToken: 'medium close-up, chest level' },
+    '近景': { en: 'Close-Up', promptToken: 'close-up, face and shoulders' },
+    '特写': { en: 'Close-Up', promptToken: 'extreme close-up, face detail' },
+    '大特写': { en: 'Extreme Close-Up', promptToken: 'extreme close-up, specific detail' },
+    '主观': { en: 'POV Shot', promptToken: 'point of view shot, first person' }
+};
+
+const CAMERA_MOVEMENT_MAP = {
+    '固定': 'static camera, locked',
+    '推镜头': 'slow dolly in, camera pushes forward',
+    '拉镜头': 'slow dolly out, camera pulls back',
+    '移镜头': 'lateral tracking shot, camera moves sideways',
+    '摇镜头': 'panning shot, camera rotates horizontally',
+    '跟镜头': 'tracking shot, camera follows subject',
+    '升降镜头': 'crane shot, vertical movement',
+    '环绕': 'orbit shot, camera circles around subject'
+};
+
+const TIME_OF_DAY_MAP = {
+    '日内': { light: 'indoor natural light through windows', mood: 'warm and clear' },
+    '夜内': { light: 'indoor warm artificial light, lamp or overhead', mood: 'intimate or tense' },
+    '日外': { light: 'bright natural sunlight', mood: 'open and clear' },
+    '夜外': { light: 'moonlight or street lamps, cold tones', mood: 'mysterious or lonely' },
+    '黄昏': { light: 'golden hour, warm orange sunset', mood: 'melancholic or romantic' },
+    '黎明': { light: 'soft dawn light, pale blue and gold', mood: 'hopeful or quiet' }
+};
+
+// ==================== 三层提示词编译器 ====================
+
+/**
+ * 编译首帧提示词（用于生成静态图片）
+ */
+function compileImagePrompt(shot, scene, characters) {
+    characters = characters || [];
+    var parts = [];
+    
+    var shotTypeInfo = SHOT_TYPE_MAP[shot.shot_type] || SHOT_TYPE_MAP['中景'];
+    parts.push(shotTypeInfo.promptToken);
+    
+    if (characters.length > 0) {
+        parts.push(characters.map(function(c) { return c.visualTraits || c.name; }).join(', '));
+    }
+    
+    if (shot.visual_prompt) {
+        parts.push(shot.visual_prompt);
+    }
+    
+    var timeInfo = TIME_OF_DAY_MAP[scene.time_of_day] || TIME_OF_DAY_MAP['日内'];
+    parts.push(timeInfo.light + ', ' + timeInfo.mood);
+    
+    parts.push('high quality, detailed, cinematic composition');
+    
+    return parts.filter(Boolean).join(', ');
+}
+
+/**
+ * 编译视频提示词（用于生成动态视频）
+ */
+function compileVideoPrompt(shot, scene, characters) {
+    characters = characters || [];
+    var parts = [];
+    
+    if (shot.action_description) {
+        parts.push(shot.action_description);
+    }
+    
+    var movementToken = CAMERA_MOVEMENT_MAP[shot.camera_movement] || 'static camera';
+    parts.push(movementToken);
+    
+    var timeInfo = TIME_OF_DAY_MAP[scene.time_of_day] || TIME_OF_DAY_MAP['日内'];
+    parts.push(timeInfo.mood + ' atmosphere');
+    
+    if (shot.dialogue && shot.dialogue.trim()) {
+        parts.push('character speaking with lip sync');
+    }
+    
+    return parts.filter(Boolean).join(', ');
+}
+
+/**
+ * 编译尾帧提示词（仅在大位移/变身/转场时需要）
+ */
+function compileEndFramePrompt(shot, scene) {
+    if (!shot.needs_end_frame) return null;
+    
+    var parts = [];
+    var shotTypeInfo = SHOT_TYPE_MAP[shot.shot_type] || SHOT_TYPE_MAP['中景'];
+    parts.push(shotTypeInfo.promptToken);
+    
+    if (shot.visual_prompt) {
+        parts.push(shot.visual_prompt);
+    }
+    
+    var timeInfo = TIME_OF_DAY_MAP[scene.time_of_day] || TIME_OF_DAY_MAP['日内'];
+    parts.push(timeInfo.light + ', ' + timeInfo.mood);
+    
+    return parts.filter(Boolean).join(', ');
+}
+
+// ==================== 模板引擎 ====================
+
+function interpolateTemplate(template, variables) {
+    return template.replace(/\{\{(\w+)\}\}/g, function(match, key) {
+        return variables[key] !== undefined ? String(variables[key]) : '';
     });
-    return { scenes: normScenes };
 }
 
-function buildLightAndMood(timeOfDay) {
-    const t = String(timeOfDay || '');
-    if (t.includes('夜')) return { light: '灯光与暗部对比强，局部高光', mood: '紧张压迫，暗色氛围' };
-    if (t.includes('晨') || t.includes('清晨') || t.includes('早')) return { light: '清晨侧光，空气有薄雾感', mood: '清冷但充满期待' };
-    if (t.includes('午') || t.includes('日') || t.includes('日内') || t.includes('日外')) return { light: '明亮自然光，柔和阴影', mood: '真实日常但暗藏危机' };
-    return { light: '自然光与环境反射光', mood: '氛围真实，情绪推进' };
+// ==================== JSON提取与解析 ====================
+
+function extractFirstJsonObject(text) {
+    if (!text) return null;
+    var cleaned = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '');
+    
+    var firstBrace = cleaned.indexOf('{');
+    var lastBrace = cleaned.lastIndexOf('}');
+    if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) return null;
+    
+    var jsonStr = cleaned.slice(firstBrace, lastBrace + 1);
+    jsonStr = jsonStr.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, '');
+    
+    return jsonStr;
 }
 
-function hasLightAndMood(text) {
-    const t = String(text || '');
-    return /光|灯|阴影|逆光|侧光|高光|暗部|氛围|色调|冷暖|雾|尘|烟|霓虹/.test(t);
+function parseJsonWithFallback(jsonText) {
+    if (!jsonText) throw new Error('AI返回内容无法解析为JSON');
+    
+    try {
+        return JSON.parse(jsonText);
+    } catch (e) {
+        console.log('[AI Service] 首次JSON解析失败，尝试修复...');
+    }
+    
+    try {
+        var cleaned = jsonText.replace(/[\x00-\x1f]/g, ' ');
+        return JSON.parse(cleaned);
+    } catch (e) {
+        console.log('[AI Service] 二次清理后仍失败，尝试暴力修复...');
+    }
+    
+    try {
+        var fixed = jsonText.replace(/,(\s*[}\]])/g, '$1');
+        var openBraces = (fixed.match(/{/g) || []).length;
+        var closeBraces = (fixed.match(/}/g) || []).length;
+        while (closeBraces < openBraces) { fixed += '}'; closeBraces++; }
+        var openBrackets = (fixed.match(/\[/g) || []).length;
+        var closeBrackets = (fixed.match(/]/g) || []).length;
+        while (closeBrackets < openBrackets) { fixed += ']'; closeBrackets++; }
+        return JSON.parse(fixed);
+    } catch (e) {
+        console.error('[AI Service] JSON暴力修复失败，原始内容前300字符:', jsonText.slice(0, 300));
+        throw new Error('AI返回JSON解析失败: ' + e.message);
+    }
 }
 
-function normalizeShotTypeValue(v) {
-    const t = String(v || '').trim();
-    if (!t) return '中景';
-    const map = {
-        '大远景': '远景',
-        '远景': '远景',
-        '全景': '全景',
-        '中景': '中景',
-        '近景': '近景',
-        '特写': '特写',
-        '大特写': '大特写',
-        '极特写': '大特写'
-    };
-    return map[t] || t;
-}
+// ==================== 数据标准化 ====================
 
-function normalizeMovementValue(v) {
-    const t = String(v || '').trim();
-    if (!t) return '固定';
-    const map = {
-        '固定': '固定',
-        '推镜头': '推镜头',
-        '拉镜头': '拉镜头',
-        '移镜头': '移镜头',
-        '摇镜头': '摇镜头',
-        '推进': '推镜头',
-        '拉远': '拉镜头',
-        '跟拍': '移镜头',
-        '摇摄': '摇镜头'
-    };
-    return map[t] || t;
-}
-
-function extractDialoguesFromSceneContent(content) {
-    const t = String(content || '');
-    const dialogues = [];
-    const lines = t.split('\n').map(s => s.trim()).filter(Boolean);
-    for (const line of lines) {
-        if (/^(人物|场景|地点|时间|道具|备注|场次)[：:]/.test(line)) continue;
-        if (/^(第.{1,3}集|第.{1,3}场)/.test(line)) continue;
-        // 格式1: 角色：台词 / 角色: 台词 (含括号标注如"队长（惊喜）：")
-        const m1 = line.match(/^(.{1,16}?)(?:\s*[（(]([^)）]+)[)）])?\s*(VO|OS)?\s*[：:]\s*(.+)$/i);
-        if (m1) {
-            const rhs = String(m1[4] || '').trim();
-            if (rhs && rhs.length < 200) dialogues.push(rhs);
-            continue;
-        }
-        // 格式2: 【角色】台词
-        const m2 = line.match(/^【(.{1,16}?)】\s*(.+)$/);
-        if (m2) {
-            const rhs = String(m2[2] || '').trim();
-            if (rhs && rhs.length < 200) dialogues.push(rhs);
-            continue;
-        }
-        // 格式3: 角色名 台词（2个以上空格分隔）
-        const m3 = line.match(/^([\u4e00-\u9fa5]{1,8})\s{2,}(.+)$/);
-        if (m3 && !/^(旁白|画外音|动作|场景|说明)/.test(m3[1])) {
-            const rhs = String(m3[2] || '').trim();
-            if (rhs && rhs.length < 200 && /[\u4e00-\u9fa5]/.test(rhs)) dialogues.push(rhs);
-            continue;
+function normalizeStoryboard(data) {
+    if (!data || !Array.isArray(data.scenes)) {
+        throw new Error('AI返回JSON缺少scenes数组');
+    }
+    
+    var validShotTypes = new Set(Object.keys(SHOT_TYPE_MAP));
+    var validMovements = new Set(Object.keys(CAMERA_MOVEMENT_MAP));
+    var fallbackShotTypes = ['远景', '全景', '中景', '近景', '特写'];
+    var fallbackMovements = ['固定', '推镜头', '移镜头', '摇镜头'];
+    
+    for (var si = 0; si < data.scenes.length; si++) {
+        var scene = data.scenes[si];
+        scene.episode = String(scene.episode || '1');
+        scene.scene_number = String(scene.scene_number || '1');
+        scene.title = String(scene.title || scene.location || '未命名场景');
+        scene.location = String(scene.location || scene.title || '未命名地点');
+        scene.time_of_day = String(scene.time_of_day || '日内');
+        scene.characters = Array.isArray(scene.characters) ? scene.characters.map(String) : [];
+        scene.content = String(scene.content || '');
+        
+        if (!Array.isArray(scene.shots)) scene.shots = [];
+        
+        for (var i = 0; i < scene.shots.length; i++) {
+            var shot = scene.shots[i];
+            shot.shot_number = i + 1;
+            
+            if (!validShotTypes.has(shot.shot_type)) {
+                shot.shot_type = fallbackShotTypes[i % fallbackShotTypes.length];
+            }
+            
+            if (!validMovements.has(shot.camera_movement)) {
+                shot.camera_movement = fallbackMovements[i % fallbackMovements.length];
+            }
+            
+            shot.duration = Number(shot.duration) || 5;
+            shot.visual_prompt = String(shot.visual_prompt || '').trim();
+            shot.original_text = String(shot.original_text || '').trim();
+            shot.dialogue = String(shot.dialogue || '').trim();
+            shot.action_description = String(shot.action_description || '').trim();
         }
     }
-    if (dialogues.length) return dialogues;
-    // Fallback: extract from Chinese/English quotes
-    const quotes = String(t || '').match(/“([^”]+)”|「([^」]+)」|"([^"]+)"|‘([^’]+)’/g) || [];
-    for (const q of quotes) {
-        const inner = q.replace(/^[\"“「‘]/, '').replace(/[\"”」’]$/, '').trim();
-        if (inner && inner.length >= 2 && inner.length < 200) dialogues.push(inner);
-    }
-    return dialogues;
+    
+    return data;
 }
 
-function extractSpeakersFromSceneContent(content) {
-    const t = String(content || '');
-    const speakers = [];
-    const lines = t.split('\n').map(s => s.trim()).filter(Boolean);
-    for (const line of lines) {
-        if (/^人物[：:]/.test(line)) continue;
-        const m = line.match(/^(.{1,16}?)(?:\s*\(([^)]+)\))?\s*(VO|OS)?\s*[：:]\s*(.+)$/i);
-        if (!m) continue;
-        const left = String(m[1] || '').trim();
-        if (!left) continue;
-        if (/旁白/.test(left)) continue;
-        speakers.push(left);
-    }
-    return [...new Set(speakers)].slice(0, 6);
-}
-
-function enforceShotAndMovementVariation(shots, { time_of_day, location, characters }) {
-    const list = Array.isArray(shots) ? shots.map(s => ({ ...s })) : [];
-    if (!list.length) return list;
-
-    const shotPattern = ['远景', '全景', '中景', '近景', '特写'];
-    const movePattern = ['固定', '推镜头', '移镜头', '摇镜头', '拉镜头'];
-    const shotTypes = list.map(s => normalizeShotTypeValue(s.shot_type));
-    const movements = list.map(s => normalizeMovementValue(s.camera_movement));
-    const uniqueShot = new Set(shotTypes.filter(Boolean));
-    const uniqueMove = new Set(movements.filter(Boolean));
-
-    for (let i = 0; i < list.length; i++) {
-        if (uniqueShot.size <= 2) list[i].shot_type = shotPattern[i % shotPattern.length];
-        else list[i].shot_type = normalizeShotTypeValue(list[i].shot_type);
-
-        if (uniqueMove.size <= 1) list[i].camera_movement = movePattern[i % movePattern.length];
-        else list[i].camera_movement = normalizeMovementValue(list[i].camera_movement);
-
-        if (i > 0 && list[i].shot_type === list[i - 1].shot_type) {
-            list[i].shot_type = shotPattern[(i + 1) % shotPattern.length];
-        }
-        if (i > 0 && list[i].camera_movement === list[i - 1].camera_movement) {
-            list[i].camera_movement = movePattern[(i + 1) % movePattern.length];
-        }
-
-        const prompt = String(list[i].visual_prompt || list[i].visual_description || '').trim();
-        const safePrompt = (() => {
-            if (!/[你您]/.test(prompt)) return prompt;
-            const replacement =
-                (Array.isArray(characters) && characters.filter(Boolean)[0]) ||
-                String(location || '').trim() ||
-                '角色';
-            return prompt
-                .replace(/和你们/g, `和${replacement}`)
-                .replace(/和你/g, `和${replacement}`)
-                .replace(/与你们/g, `与${replacement}`)
-                .replace(/与你/g, `与${replacement}`)
-                .replace(/你们/g, replacement)
-                .replace(/你/g, replacement)
-                .replace(/您/g, replacement);
-        })();
-
-        if (!hasLightAndMood(safePrompt)) {
-            const lm = buildLightAndMood(time_of_day);
-            const loc = String(location || '').trim();
-            const chars = Array.isArray(characters) ? characters.filter(Boolean) : [];
-            const hasChar = chars.length ? chars.some(c => safePrompt.includes(String(c))) : false;
-            const suffix = `，光影：${lm.light}，氛围：${lm.mood}${loc ? `，地点：${loc}` : ''}${chars.length && !hasChar ? `，人物：${chars.join('、')}` : ''}`;
-            list[i].visual_prompt = `${safePrompt || '画面描述'}${suffix}`;
-            list[i].visual_description = list[i].visual_prompt;
-        } else if (safePrompt !== prompt) {
-            list[i].visual_prompt = safePrompt;
-            list[i].visual_description = safePrompt;
-        }
-    }
-    return list;
-}
-
-function assignDialoguesToShots(scene, shots) {
-    const list = Array.isArray(shots) ? shots.map(s => ({ ...s })) : [];
-    if (!list.length) return list;
-    const extracted = extractDialoguesFromSceneContent(scene?.content || '');
-    const speakers = extractSpeakersFromSceneContent(scene?.content || '');
-    const nonEmptyDialogueCount = list.filter(s => String(s.dialogue || '').trim()).length;
-    // If model already assigned dialogues well, trust it
-    if (nonEmptyDialogueCount >= extracted.length && nonEmptyDialogueCount > 0) return list;
-    if (!extracted.length && nonEmptyDialogueCount) return list;
-
-    if (!extracted.length) {
-        // Try to extract from original_text of each shot
-        for (let i = 0; i < list.length; i++) {
-            const orig = String(list[i].original_text || '').trim();
-            if (!orig) list[i].original_text = String(scene?.content || '').trim();
-            if (!String(list[i].dialogue || '').trim()) {
-                // Try extracting from quotes in original_text
-                const quotedMatch = String(orig).match(/“([^”]+)”|「([^」]+)」|"([^"]+)"/);
-                if (quotedMatch) {
-                    const d = (quotedMatch[1] || quotedMatch[2] || quotedMatch[3] || '').trim();
-                    if (d) list[i].dialogue = d;
-                }
-                // Try 角色：台词 in original_text
-                if (!list[i].dialogue) {
-                    const colonMatch = String(orig).match(/[\u4e00-\u9fa5]{1,8}[：:]\s*(.+)$/);
-                    if (colonMatch) list[i].dialogue = String(colonMatch[1] || '').trim();
-                }
-                if (!list[i].dialogue) {
-                    list[i].dialogue = '';
-                    list[i].action_description = list[i].action_description || orig || '';
-                }
+/**
+ * 为每个shot编译三层提示词
+ */
+function compilePromptsForStoryboard(data, characters) {
+    characters = characters || [];
+    if (!data || !data.scenes) return data;
+    
+    for (var si = 0; si < data.scenes.length; si++) {
+        var scene = data.scenes[si];
+        for (var i = 0; i < scene.shots.length; i++) {
+            var shot = scene.shots[i];
+            shot.image_prompt = compileImagePrompt(shot, scene, characters);
+            shot.image_prompt_zh = shot.visual_prompt;
+            shot.video_prompt = compileVideoPrompt(shot, scene, characters);
+            shot.video_prompt_zh = shot.action_description;
+            
+            shot.needs_end_frame = /变身|变形|大幅|飞跃|奔跑|冲出|转场/.test(
+                shot.action_description + shot.visual_prompt
+            );
+            
+            if (shot.needs_end_frame) {
+                shot.end_frame_prompt = compileEndFramePrompt(shot, scene);
+                shot.end_frame_prompt_zh = '';
             }
         }
-        return list;
     }
-
-    // Distribute extracted dialogues to shots that don't have one
-    let dIdx = 0;
-    for (let i = 0; i < list.length; i++) {
-        if (!String(list[i].dialogue || '').trim() && dIdx < extracted.length) {
-            list[i].dialogue = extracted[dIdx] || '';
-            dIdx++;
-        }
-        if (!String(list[i].original_text || '').trim()) {
-            list[i].original_text = String(list[i].dialogue || scene?.content || '').trim();
-        }
-        if (!String(list[i].action_description || '').trim()) {
-            const orig = String(list[i].original_text || '').trim();
-            list[i].action_description = orig.replace(/“[^”]+”|「[^」]+」|"([^"]+)"/g, '').trim();
-        }
-    }
-    // If more dialogues than shots, append to last shot
-    while (dIdx < extracted.length) {
-        const lastShot = list[list.length - 1];
-        if (lastShot) {
-            lastShot.dialogue = lastShot.dialogue ? lastShot.dialogue + '\uFF1B' + extracted[dIdx] : extracted[dIdx];
-        }
-        dIdx++;
-    }
-
-    const anyDialogue = list.some(s => String(s.dialogue || '').trim());
-    if (!anyDialogue && extracted.length) {
-        list[0].dialogue = extracted[0] || '';
-    }
-    return list;
-}
-function ensureDialogueCoverage(scene, shots) {
-    const list = Array.isArray(shots) ? shots.map(s => ({ ...s })) : [];
-    const extracted = extractDialoguesFromSceneContent(scene?.content || '');
-    if (extracted.length < 2) return list;
-
-    const speakers = extractSpeakersFromSceneContent(scene?.content || '');
-    const location = String(scene?.location || scene?.title || '').trim();
-    const lm = buildLightAndMood(scene?.time_of_day || scene?.timeOfDay || '');
-
-    const existing = new Set(list.map(s => String(s.dialogue || '').trim()).filter(Boolean));
-    for (const d of extracted) {
-        const dt = String(d || '').trim();
-        if (!dt) continue;
-        if (existing.has(dt)) continue;
-        const shot_number = list.length + 1;
-        const shot_type = normalizeShotTypeValue(['中景', '近景', '特写'][shot_number % 3]);
-        const camera_movement = normalizeMovementValue(['固定', '推镜头', '移镜头'][shot_number % 3]);
-        const speaker = speakers[shot_number % Math.max(1, speakers.length)] || speakers[0] || '';
-        const base = `${shot_type}，${location || '室内'}，${speaker ? `${speaker}说话，` : ''}对白清晰，表情和语气可见`;
-        const visual_prompt = `${base}，光影：${lm.light}，氛围：${lm.mood}`;
-        list.push({
-            shot_number,
-            shot_type,
-            camera_movement,
-            duration: 3,
-            visual_prompt,
-            visual_description: visual_prompt,
-            original_text: dt,
-            dialogue: dt,
-            action_description: ''
-        });
-        existing.add(dt);
-    }
-
-    if (list.length < 5 && (speakers.length || location)) {
-        const establish = {
-            shot_number: 0,
-            shot_type: '远景',
-            camera_movement: '摇镜头',
-            duration: 4,
-            visual_prompt: `远景，${location || '地点'}整体空间与环境信息，人物关系站位清晰，光影：${lm.light}，氛围：${lm.mood}`,
-            visual_description: '',
-            original_text: String(scene?.content || '').split('\n').slice(0, 3).join('\n').trim(),
-            dialogue: '',
-            action_description: '交代场景与人物关系'
-        };
-        establish.visual_description = establish.visual_prompt;
-        list.unshift(establish);
-
-        const closing = {
-            shot_number: 0,
-            shot_type: '特写',
-            camera_movement: '推镜头',
-            duration: 4,
-            visual_prompt: `特写，${speakers[0] ? `${speakers[0]}的眼神与微表情` : '人物的眼神与微表情'}，情绪收束，光影：${lm.light}，氛围：${lm.mood}`,
-            visual_description: '',
-            original_text: String(scene?.content || '').split('\n').slice(-3).join('\n').trim(),
-            dialogue: '',
-            action_description: '收束情绪与悬念'
-        };
-        closing.visual_description = closing.visual_prompt;
-        list.push(closing);
-    }
-
-    return list;
+    
+    return data;
 }
 
-function dedupeAndRenumberShots(shots) {
-    const list = Array.isArray(shots) ? shots.map(s => ({ ...s })) : [];
-    const seen = new Set();
-    const out = [];
-    for (const sh of list) {
-        const prompt = String(sh.visual_prompt || '').trim();
-        const basePrompt = prompt.replace(/，光影：.*$/, '').trim();
-        const dialogue = String(sh.dialogue || '').trim();
-        const originalText = String(sh.original_text || '').trim();
-        const key = [dialogue, originalText, basePrompt].join('|');
-        if (seen.has(key)) continue;
-        seen.add(key);
-        out.push(sh);
+// ==================== 主函数 ====================
+
+/**
+ * 从剧本生成分镜（重构版）
+ */
+async function generateStoryboardFromScript(params) {
+    var title = params.title;
+    var content = params.content;
+    var scriptTitle = String(title || '').trim();
+    var scriptContent = String(content || '').trim();
+    
+    if (!scriptContent) {
+        throw new Error('剧本内容为空');
     }
-    for (let i = 0; i < out.length; i++) out[i].shot_number = i + 1;
-    return out;
-}
-
-function postProcessStoryboard(normalized) {
-    const scenes = Array.isArray(normalized?.scenes) ? normalized.scenes : [];
-    const processed = scenes.map((scene) => {
-        const shots0 = Array.isArray(scene?.shots) ? scene.shots : [];
-        const shots1 = enforceShotAndMovementVariation(shots0, { time_of_day: scene.time_of_day, location: scene.location, characters: scene.characters });
-        const shots2 = assignDialoguesToShots(scene, shots1);
-        const shots3 = ensureDialogueCoverage(scene, shots2);
-        const shots4 = enforceShotAndMovementVariation(shots3, { time_of_day: scene.time_of_day, location: scene.location, characters: scene.characters });
-        const shots5 = dedupeAndRenumberShots(shots4);
-        return { ...scene, shots: shots5 };
-    });
-    return { scenes: processed };
-}
-
-async function generateStoryboardFromScript({ title, content }) {
-    const scriptTitle = String(title || '').trim();
-    const scriptContent = String(content || '').trim();
-    const provider = resolveChatProvider();
+    
+    var provider = resolveChatProvider();
     if (!provider) {
         throw new Error('未配置可用的大模型接口。请在 backend/.env 按 backend/.env.example 添加：AI_PROVIDER=openai-compatible、AI_API_KEY、AI_BASE_URL、AI_MODEL（推荐），然后重试上传。');
     }
-
-        const system = `你是资深漫剧导演+分镜师。把用户提供的漫剧剧本原文拆成场景列表+每场景镜头列表。你只输出JSON，不要任何解释。
-
-【关键规则】
-1. dialogue字段最重要：每句台词/旁白都必须写入对应镜头的dialogue字段，绝对不能留空。纯动作镜头dialogue写空字符串""。
-2. 景别必须有变化：远景→全景→中景→近景→特写交替使用，不要全是特写或全景。
-3. 运镜必须有变化：固定/推镜头/拉镜头/移镜头/摇镜头交替使用，不要全是固定。
-4. visual_prompt必须具体可拍：必须包含地点+人物名+具体动作+表情情绪+光影+氛围，不要写模板化描述。
-5. 禁止第二人称：visual_prompt中不允许出现"你/你们/和你"等词，必须用具体角色名。
-6. 禁止重复镜头。
-
-【范例】
-输入剧本片段：
-农场-温室，日外。队长看着枯萎的番茄，队员甲跑来。
-队长：完了，这批番茄全完了。
-队员甲：队长！北边发现了活株！
-队长（惊喜）：真的？快带我去！
-
-输出JSON：
-{
-  "scenes": [{
-    "episode": "1",
-    "scene_number": "1",
-    "title": "农场-温室",
-    "location": "农场-温室内部",
-    "time_of_day": "日外",
-    "characters": ["队长", "队员甲"],
-    "content": "农场-温室，日外。队长看着枯萎的番茄，队员甲跑来。\n队长：完了，这批番茄全完了。\n队员甲：队长！北边发现了活株！\n队长（惊喜）：真的？快带我去！",
-    "shots": [
-      {"shot_number":1,"shot_type":"全景","camera_movement":"摇镜头","duration":4,"visual_prompt":"全景，农场温室内部，枯萎番茄藤蔓蔓延整个画面，队长站在田垄间低头审视，光影：顶棚透过的强光照射枯叶，氛围：压抑绝望","original_text":"农场-温室，日外。队长看着枯萎的番茄","dialogue":"","action_description":"队长审视枯萎番茄"},
-      {"shot_number":2,"shot_type":"近景","camera_movement":"推镜头","duration":3,"visual_prompt":"近景，队长面部特写，眉头紧锁眼神沮丧，手中枯叶掉落，光影：侧面强光勾勒面部轮廓，氛围：沉重无奈","original_text":"队长：完了，这批番茄全完了。","dialogue":"完了，这批番茄全完了。","action_description":"队长沮丧地说"},
-      {"shot_number":3,"shot_type":"中景","camera_movement":"移镜头","duration":3,"visual_prompt":"中景，队员甲从远处跑来，喘着气表情激动，背景温室门框，光影：逆光剪影效果，氛围：紧张转期待","original_text":"队员甲跑来\n队员甲：队长！北边发现了活株！","dialogue":"队长！北边发现了活株！","action_description":"队员甲跑来报告"},
-      {"shot_number":4,"shot_type":"特写","camera_movement":"固定","duration":3,"visual_prompt":"特写，队长眼睛瞬间睁大，瞳孔中映出队员甲的身影，嘴角微扬，光影：眼神中映出希望之光，氛围：惊喜爆发","original_text":"队长（惊喜）：真的？快带我去！","dialogue":"真的？快带我去！","action_description":"队长惊喜反应"},
-      {"shot_number":5,"shot_type":"远景","camera_movement":"拉镜头","duration":4,"visual_prompt":"远景，两人一前一后奔出温室大门，奔向远方的北面田野，光影：阳光洒在奔跑的身影上，氛围：充满希望与紧迫感","original_text":"队长和队员甲奔向北面","dialogue":"","action_description":"两人奔出温室"}
-    ]
-  }]
-}
-
-注意：上面范例中有2个镜头dialogue为空（纯动作镜头），3个镜头有台词。每个有台词的镜头，dialogue都写入了台词内容。这就是你要遵循的格式。`;
-
-    const user = `请严格参照上面的范例格式，把下面剧本拆成JSON。特别注意：每句台词必须写入对应镜头的dialogue字段，不能留空！
-
-【剧本标题】${scriptTitle}
-
-【剧本原文】
-${scriptContent}`;
-
-    let result;
+    
+    var systemPrompt = STORYBOARD_SYSTEM_PROMPT;
+    var userPrompt = interpolateTemplate(STORYBOARD_USER_TEMPLATE, {
+        title: scriptTitle || '未命名剧本',
+        content: scriptContent
+    });
+    
+    var result;
     try {
-        result = await generateTextWithProvider(provider, { system, user, temperature: 0.3, maxTokens: 16000, enableRetry: true });
+        result = await generateTextWithProvider(provider, {
+            system: systemPrompt,
+            user: userPrompt,
+            temperature: 0.2,
+            maxTokens: 16000,
+            enableRetry: true
+        });
     } catch (e) {
-        const msg = String(e?.message || '');
+        var msg = String(e && e.message || '');
         if (provider === 'ernie' && /client_id|client id|invalid|无效/i.test(msg)) {
             throw new Error('文心一言鉴权失败（client_id 无效）。请在 backend/.env 配置可用的 OpenAI兼容接口：AI_API_KEY / AI_BASE_URL / AI_MODEL（或配置 SILICONFLOW_API_KEY），然后重试上传。');
         }
         throw e;
     }
-
-    let jsonText = extractFirstJsonObject(result.content);
-    if (!jsonText) throw new Error('AI返回内容无法解析为JSON');
-
-    // 二次清理：确保没有残留的控制字符
-    jsonText = jsonText.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, '');
-
-    let parsed;
-    try {
-        parsed = JSON.parse(jsonText);
-    } catch (e) {
-        // 第二次尝试：从原始内容重新提取，强力清洗
-        try {
-            const raw = result.content || '';
-            const jStart = raw.indexOf('{');
-            const jEnd = raw.lastIndexOf('}');
-            if (jStart < 0 || jEnd <= jStart) throw new Error('无法定位JSON边界');
-            let extracted = raw.slice(jStart, jEnd + 1);
-            // 把真正的换行/回车/制表替换为空格
-            extracted = extracted.replace(/[\n\r\t]/g, ' ');
-            // 把所有连续空白替换为单空格
-            extracted = extracted.replace(/\s+/g, ' ');
-            // 移除开头 { 后的多余空格
-            extracted = extracted.replace(/^\{\s+/, '{');
-            // 移除结尾 } 前的多余空格
-            extracted = extracted.replace(/\s+}$/, '}');
-            // 移除属性名后的多余空格
-            extracted = extracted.replace(/\"\s+:/g, '":');
-            // 移除结尾逗号
-            extracted = extracted.replace(/,(\s*[\]\}])/g, '$1');
-            extracted = extracted.trim();
-            parsed = JSON.parse(extracted);
-            console.log('[AI Service] JSON解析通过（二次提取清理后）');
-        } catch (e2) {
-            // 第三次尝试：只保留JSON有效字符
-            try {
-                let cleaned = jsonText.replace(/[^\x20-\x7e\u4e00-\u9fa5\u3000-\u303f\uff00-\uffef\{\}\[\]":,.\-+truefalse_null\\\s]/g, '');
-                cleaned = cleaned.replace(/\s+/g, ' ').trim();
-                parsed = JSON.parse(cleaned);
-                console.log('[AI Service] JSON解析通过（三次字符过滤后）');
-            } catch (e3) {
-                console.error('[AI Service] JSON原始内容前500字符:', jsonText.slice(0, 500));
-                throw new Error('AI返回JSON解析失败: ' + e.message);
-            }
-        }
+    
+    var jsonText = extractFirstJsonObject(result.content);
+    var parsed = parseJsonWithFallback(jsonText);
+    var normalized = normalizeStoryboard(parsed);
+    var compiled = compilePromptsForStoryboard(normalized);
+    
+    if (!compiled.scenes.length) {
+        throw new Error('AI返回JSON缺少有效场景');
     }
-
-    const normalized = normalizeStoryboardJson(parsed);
-    const processed = postProcessStoryboard(normalized);
-    if (!processed.scenes.length) throw new Error('AI返回JSON缺少 scenes');
-    return { success: true, provider, model: result.model, usage: result.usage, data: processed };
+    
+    return {
+        success: true,
+        provider: provider,
+        model: result.model,
+        usage: result.usage,
+        data: compiled
+    };
 }
 
-/**
- * 生成漫剧剧本
- * @param {Object} params - 剧本参数
- * @returns {Promise<Object>} - 返回剧本内容
- */
 const generateScript = async (params) => {
     const {
         genre = '原创',
@@ -1301,7 +1126,6 @@ module.exports = {
     estimateTokens,
     generateText,
     generateStoryboardFromScript,
-    postProcessStoryboard,
     generateScript,
     continueScript,
     generateDialogue,
@@ -1310,5 +1134,50 @@ module.exports = {
     batchGenerate,
     generateCoverPrompt,
     AI_CONFIG,
-    CURRENT_PROVIDER
+    CURRENT_PROVIDER,
+    // 分镜拆分新模块导出
+    compileImagePrompt,
+    compileVideoPrompt,
+    compileEndFramePrompt,
+    interpolateTemplate,
+    extractFirstJsonObject,
+    parseJsonWithFallback,
+    normalizeStoryboard,
+    compilePromptsForStoryboard,
+    SHOT_TYPE_MAP,
+    CAMERA_MOVEMENT_MAP,
+    TIME_OF_DAY_MAP,
+    STORYBOARD_SYSTEM_PROMPT,
+    STORYBOARD_USER_TEMPLATE
+};
+
+module.exports = {
+    isConfigured,
+    getConfig,
+    getServiceStatus,
+    estimateTokens,
+    generateText,
+    generateStoryboardFromScript,
+    generateScript,
+    continueScript,
+    generateDialogue,
+    generateSceneDescription,
+    generateTitle,
+    batchGenerate,
+    generateCoverPrompt,
+    AI_CONFIG,
+    CURRENT_PROVIDER,
+    compileImagePrompt,
+    compileVideoPrompt,
+    compileEndFramePrompt,
+    interpolateTemplate,
+    extractFirstJsonObject,
+    parseJsonWithFallback,
+    normalizeStoryboard,
+    compilePromptsForStoryboard,
+    SHOT_TYPE_MAP,
+    CAMERA_MOVEMENT_MAP,
+    TIME_OF_DAY_MAP,
+    STORYBOARD_SYSTEM_PROMPT,
+    STORYBOARD_USER_TEMPLATE
 };
