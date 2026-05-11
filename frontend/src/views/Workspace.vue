@@ -1650,7 +1650,6 @@ import {
   ArrowLeft,
   ArrowUp,
   ArrowDown,
-  Picture
 } from '@element-plus/icons-vue'
 
 const props = defineProps({
