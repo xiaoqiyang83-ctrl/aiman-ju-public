@@ -1,5 +1,5 @@
 <template>
-  <el-aside class="sidebar" :width="collapsed ? '64px' : '240px'">
+  <el-aside class="sidebar" :width="collapsed ? '64px' : '200px'">
     <div class="collapse-toggle" @click="collapsed = !collapsed">
       <el-icon><component :is="collapsed ? 'DArrowRight' : 'DArrowLeft'" /></el-icon>
     </div>
@@ -9,8 +9,8 @@
         <span class="logo-icon-text">AI</span>
       </div>
       <div class="logo-text" v-show="!collapsed">
-        <span class="logo-title">AI漫剧制作工具</span>
-        <span class="logo-subtitle">一站式AI漫剧创作平台</span>
+        <span class="logo-title">AI漫剧</span>
+        <span class="logo-subtitle">一站式创作平台</span>
       </div>
     </div>
 
@@ -233,16 +233,16 @@ const storageColor = computed(() => {
 .sidebar-logo {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 20px 16px;
+  gap: 10px;
+  padding: 14px 12px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .logo-icon {
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
   background: linear-gradient(135deg, #409eff 0%, #53a8ff 100%);
-  border-radius: 10px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -251,7 +251,7 @@ const storageColor = computed(() => {
 
 .logo-icon-text {
   color: white;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: bold;
 }
 
@@ -263,14 +263,14 @@ const storageColor = computed(() => {
 
 .logo-title {
   color: white;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   white-space: nowrap;
 }
 
 .logo-subtitle {
   color: #a0a9c4;
-  font-size: 10px;
+  font-size: 9px;
   white-space: nowrap;
 }
 
@@ -291,22 +291,24 @@ const storageColor = computed(() => {
 }
 
 .menu-section {
-  padding: 8px 0;
+  padding: 4px 0;
 }
 
 .menu-section-title {
-  padding: 8px 20px;
-  font-size: 11px;
+  padding: 6px 12px;
+  font-size: 10px;
   color: #606885;
   text-transform: uppercase;
   letter-spacing: 1px;
 }
 
 .sidebar-menu :deep(.el-menu-item) {
-  height: 44px;
-  line-height: 44px;
-  margin: 2px 8px;
-  border-radius: 8px;
+  height: 38px;
+  line-height: 38px;
+  margin: 1px 6px;
+  padding: 0 12px !important;
+  font-size: 13px;
+  border-radius: 6px;
 }
 
 .sidebar-menu :deep(.el-menu-item:hover) {
@@ -322,7 +324,7 @@ const storageColor = computed(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
+  padding: 10px 12px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   background-color: rgba(0, 0, 0, 0.1);
 }
@@ -330,12 +332,12 @@ const storageColor = computed(() => {
 .user-info {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .user-avatar {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   background-color: #409eff;
   display: flex;
@@ -352,34 +354,34 @@ const storageColor = computed(() => {
 
 .user-name {
   color: white;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
 }
 
 /* 底部存储 */
 .sidebar-footer {
-  padding: 12px 16px;
+  padding: 10px 12px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .storage-info {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .storage-header {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   color: #a0a9c4;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .storage-text {
   display: flex;
   justify-content: space-between;
-  font-size: 11px;
+  font-size: 10px;
 }
 
 .storage-used {
@@ -395,7 +397,7 @@ const storageColor = computed(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 8px;
+  padding: 6px;
   cursor: pointer;
   color: #a0a9c4;
   transition: color 0.2s;
@@ -408,13 +410,13 @@ const storageColor = computed(() => {
 /* Logo折叠状态 */
 .sidebar-logo.logo-collapsed {
   justify-content: center;
-  padding: 20px 12px;
+  padding: 14px 10px;
 }
 
 /* 用户区折叠状态 */
 .sidebar-user.user-collapsed {
   justify-content: center;
-  padding: 12px;
+  padding: 10px;
 }
 
 /* 折叠时section标题隐藏 */

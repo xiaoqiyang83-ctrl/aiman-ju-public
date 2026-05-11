@@ -4237,7 +4237,7 @@ const handleMoveShot = async (scene, shot, direction) => {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background-color: #f5f7fa;
+  background-color: #e8ecf1;
 }
 
 /* 欢迎页面样式 */
@@ -4382,7 +4382,8 @@ const handleMoveShot = async (scene, shot, direction) => {
   align-items: center;
   padding: 12px 20px;
   background-color: #ffffff;
-  border-bottom: 1px solid #e8e8e8;
+  border-bottom: 2px solid #d0d5dd;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
 .header-left {
@@ -4460,8 +4461,8 @@ const handleMoveShot = async (scene, shot, direction) => {
 
 .workspace-content {
   font-size: 18px;
-  font-weight: 600;
-  color: #303133;
+  font-weight: 700;
+  color: #1a1f36;
   margin: 0;
 }
 
@@ -4473,10 +4474,16 @@ const handleMoveShot = async (scene, shot, direction) => {
 
 .quick-actions .el-button {
   font-size: 13px;
+  color: #404758;
+}
+
+.quick-actions .el-button:hover {
+  color: #409eff;
 }
 
 .quick-actions .el-divider {
   margin: 0 4px;
+  color: #d0d5dd;
 }
 
 /* 工作区主体 */
@@ -4500,7 +4507,9 @@ const handleMoveShot = async (scene, shot, direction) => {
 
 /* 项目概览卡片 */
 .overview-card {
-  border-radius: 8px;
+  border-radius: 12px;
+  border: 2px solid #d0d5dd;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
 }
 
 .project-overview {
@@ -4511,9 +4520,10 @@ const handleMoveShot = async (scene, shot, direction) => {
 .project-cover {
   width: 80px;
   height: 80px;
-  border-radius: 8px;
+  border-radius: 10px;
   overflow: hidden;
   flex-shrink: 0;
+  border: 2px solid #e8ecf1;
 }
 
 .project-cover img {
@@ -4529,7 +4539,7 @@ const handleMoveShot = async (scene, shot, direction) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #c0c4cc;
+  color: #909399;
   font-size: 32px;
 }
 
@@ -4543,8 +4553,8 @@ const handleMoveShot = async (scene, shot, direction) => {
 .project-title {
   margin: 0;
   font-size: 16px;
-  font-weight: 600;
-  color: #303133;
+  font-weight: 700;
+  color: #1a1f36;
 }
 
 .project-meta {
@@ -4552,7 +4562,7 @@ const handleMoveShot = async (scene, shot, direction) => {
   flex-wrap: wrap;
   gap: 8px;
   font-size: 12px;
-  color: #909399;
+  color: #606770;
 }
 
 .meta-item {
@@ -4571,11 +4581,11 @@ const handleMoveShot = async (scene, shot, direction) => {
   display: flex;
   justify-content: space-between;
   font-size: 12px;
-  color: #606266;
+  color: #404758;
 }
 
 .progress-value {
-  font-weight: 600;
+  font-weight: 700;
   color: #409eff;
 }
 
@@ -4587,27 +4597,29 @@ const handleMoveShot = async (scene, shot, direction) => {
 }
 
 .update-time {
-  color: #909399;
+  color: #606770;
 }
 
 /* 快捷操作 */
 .quick-operations {
-  background: #fff;
-  border-radius: 8px;
+  background: #ffffff;
+  border-radius: 12px;
   padding: 16px;
+  border: 2px solid #d0d5dd;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
 }
 
 .section-title {
   margin: 0 0 12px 0;
   font-size: 14px;
-  font-weight: 600;
-  color: #303133;
+  font-weight: 700;
+  color: #1a1f36;
 }
 
 .operation-buttons {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
+  gap: 10px;
 }
 
 .op-btn {
@@ -4615,33 +4627,37 @@ const handleMoveShot = async (scene, shot, direction) => {
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  padding: 12px 8px;
+  padding: 14px 8px;
   background: #f5f7fa;
-  border: none;
-  border-radius: 8px;
+  border: 2px solid #e8ecf1;
+  border-radius: 10px;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .op-btn:hover {
   background: #e8f3ff;
+  border-color: #409eff;
   transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.15);
 }
 
 .op-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
+  font-size: 20px;
   color: #409eff;
+  background: linear-gradient(135deg, #ecf5ff 0%, #d9ecff 100%);
 }
 
 .op-btn span {
   font-size: 12px;
-  color: #606266;
+  font-weight: 600;
+  color: #404758;
 }
 
 /* 中列内容区 */
@@ -4674,10 +4690,12 @@ const handleMoveShot = async (scene, shot, direction) => {
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: #fff;
-  border-radius: 8px;
+  background: #ffffff;
+  border-radius: 12px;
+  border: 2px solid #d0d5dd;
   overflow-y: auto;
   min-height: 0;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
 }
 
 .tab-content.storyboard-content {
@@ -4692,11 +4710,12 @@ const handleMoveShot = async (scene, shot, direction) => {
 
 .content-toolbar {
   padding: 16px;
-  border-bottom: 1px solid #e8e8e8;
+  border-bottom: 2px solid #e8ecf1;
   display: flex;
   gap: 12px;
   align-items: center;
   flex-wrap: wrap;
+  background: #fafbfc;
 }
 
 /* 剧本列表 */
@@ -4717,11 +4736,14 @@ const handleMoveShot = async (scene, shot, direction) => {
 .script-card {
   cursor: pointer;
   transition: all 0.2s;
+  border: 2px solid #e8ecf1;
+  border-radius: 12px;
 }
 
 .script-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(64, 158, 255, 0.15);
+  border-color: #409eff;
 }
 
 .script-header {
@@ -4734,15 +4756,15 @@ const handleMoveShot = async (scene, shot, direction) => {
 .script-title {
   margin: 0;
   font-size: 15px;
-  font-weight: 600;
-  color: #303133;
+  font-weight: 700;
+  color: #1a1f36;
 }
 
 .script-meta {
   display: flex;
   justify-content: space-between;
   font-size: 12px;
-  color: #909399;
+  color: #606770;
   margin-bottom: 12px;
 }
 
@@ -4775,10 +4797,14 @@ const handleMoveShot = async (scene, shot, direction) => {
   cursor: pointer;
   transition: all 0.3s;
   overflow: hidden;
+  border: 2px solid #d0d5dd;
+  border-radius: 14px;
 }
 
 .character-card-enhanced:hover {
   transform: translateY(-5px);
+  border-color: #409eff;
+  box-shadow: 0 8px 24px rgba(64, 158, 255, 0.2);
 }
 
 .char-avatar-enhanced {
@@ -4803,7 +4829,8 @@ const handleMoveShot = async (scene, shot, direction) => {
 }
 
 .char-info-enhanced {
-  padding: 12px;
+  padding: 14px;
+  background: #ffffff;
 }
 
 .char-name-row {
@@ -4814,13 +4841,14 @@ const handleMoveShot = async (scene, shot, direction) => {
 }
 
 .char-name {
-  font-weight: bold;
+  font-weight: 700;
   font-size: 16px;
+  color: #1a1f36;
 }
 
 .char-stats-row {
   font-size: 12px;
-  color: #909399;
+  color: #606770;
   margin-bottom: 12px;
   display: flex;
   align-items: center;
@@ -4829,8 +4857,8 @@ const handleMoveShot = async (scene, shot, direction) => {
 .char-actions-enhanced {
   display: flex;
   justify-content: flex-end;
-  border-top: 1px solid #f0f2f5;
-  padding-top: 8px;
+  border-top: 2px solid #e8ecf1;
+  padding-top: 10px;
 }
 
 /* 多角度上传器 */
@@ -4940,16 +4968,16 @@ const handleMoveShot = async (scene, shot, direction) => {
   background: #fff;
   border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
   transition: all 0.3s ease;
   width: 100%;
   margin-bottom: 20px;
-  border: 1px solid #ebeef5;
+  border: 2px solid #c8d0db;
 }
 
 .scene-card-enhanced:hover {
-  box-shadow: 0 6px 24px rgba(64, 158, 255, 0.1);
-  border-color: #c6e2ff;
+  box-shadow: 0 8px 32px rgba(64, 158, 255, 0.2);
+  border-color: #409eff;
 }
 
 .scene-header-enhanced {
@@ -5052,7 +5080,7 @@ const handleMoveShot = async (scene, shot, direction) => {
 /* 增强版镜头卡片 */
 .shot-card-enhanced {
   background: #fff;
-  border: 2px solid #e4e7ed;
+  border: 2px solid #d0d5dd;
   border-radius: 14px;
   overflow: hidden;
   cursor: pointer;
@@ -5062,16 +5090,18 @@ const handleMoveShot = async (scene, shot, direction) => {
 .shot-card-enhanced:hover {
   border-color: #409eff;
   transform: translateY(-4px);
-  box-shadow: 0 12px 32px rgba(64, 158, 255, 0.18);
+  box-shadow: 0 12px 32px rgba(64, 158, 255, 0.25);
 }
 
 .shot-card-enhanced.selected {
   border-color: #67c23a;
-  box-shadow: 0 0 0 3px rgba(103, 194, 58, 0.2);
+  border-width: 3px;
+  box-shadow: 0 0 0 4px rgba(103, 194, 58, 0.25);
 }
 
 .shot-card-enhanced.completed {
   border-color: #67c23a;
+  border-width: 2px;
 }
 
 .shot-card-enhanced.completed .shot-thumb-enhanced {
@@ -5080,6 +5110,7 @@ const handleMoveShot = async (scene, shot, direction) => {
 
 .shot-card-enhanced.generating {
   border-color: #e6a23c;
+  border-width: 2px;
   animation: pulse 2s infinite;
 }
 
