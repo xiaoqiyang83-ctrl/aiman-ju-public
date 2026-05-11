@@ -437,6 +437,7 @@ const generateTextWithProvider = async (provider, { system, user, temperature = 
         const result = response.data;
 
         if (!result?.choices || !result.choices.length) {
+            console.error('[AI Service] API返回异常，完整响应:', JSON.stringify(result).slice(0, 500));
             throw new Error('AI响应格式错误：无可用选项');
         }
 
