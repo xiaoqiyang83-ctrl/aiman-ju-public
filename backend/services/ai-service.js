@@ -149,7 +149,7 @@ const withRetry = async (fn, maxRetries = 3, delay = 1000) => {
             return await fn();
         } catch (error) {
             lastError = error;
-            console.log(`[AI Service] 请求失败，第${i + 1}次重试...`);
+            console.log(`[AI Service] 请求失败，第${i + 1}次重试...`, error?.message || error);
             if (i < maxRetries - 1) {
                 await new Promise(resolve => setTimeout(resolve, delay * (i + 1)));
             }
