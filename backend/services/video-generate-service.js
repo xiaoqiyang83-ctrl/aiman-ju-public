@@ -7,7 +7,7 @@
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
-const { pool } = require('../config/database');
+const { pool } = require('../shared');
 
 // 智谱AI配置
 const ZHIPU_API_KEY = process.env.ZHIPU_API_KEY || 'bbeed8803bea453bb6b12198c276087a.EmUkjkS2HbdyoLwg';
@@ -256,7 +256,7 @@ async function generateShotVideo(shotId, options = {}) {
   }
 
   // 获取完整的视频提示词
-  const prompt = shot.video_prompt || shot.visual_description || shot.description;
+  const prompt = shot.video_prompt || shot.visual_prompt || shot.visual_description || shot.action_description;
 
   if (!prompt) {
     throw new Error('镜头没有视频提示词');

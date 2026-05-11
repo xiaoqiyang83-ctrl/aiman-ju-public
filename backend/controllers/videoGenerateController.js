@@ -86,7 +86,7 @@ async function getTaskStatus(req, res) {
     if (result.status === 'completed' && result.videoUrl) {
       // 需要知道shotId才能更新数据库
       // 从job_id字段查询
-      const { pool } = require('../config/database');
+      const { pool } = require('../shared');
       const shotResult = await pool.query(
         'SELECT id, job_id FROM shots WHERE job_id = $1',
         [taskId]
