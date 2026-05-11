@@ -134,9 +134,13 @@ async function generateImage({ prompt, model = DEFAULT_MODEL, size = DEFAULT_SIZ
  * 生成角色图片（根据角色锚点+变体）
  * @param {number} characterId - 角色ID
  * @param {number} [variationId] - 变体ID（可选）
+ * @param {Object} [options] - 额外选项
+ * @param {string} [options.view_type] - 视角类型（front/side/back）
+ * @param {string} [options.prompt] - 自定义提示词（如果有）
  * @returns {Promise<Object>} { imageUrl: 本地路径 }
  */
-async function generateCharacterImage(characterId, variationId = null) {
+async function generateCharacterImage(characterId, variationId = null, options = {}) {
+  const { view_type, prompt: customPrompt } = options;
   const { compileCharacterPrompt } = require('./character_calibration');
   
   // 获取角色信息
@@ -177,23 +181,58 @@ async function generateCharacterImage(characterId, variationId = null) {
       visualPrompt = compiled.visual_prompt_en;
     }
   }
+  
+  // 如果有自定义prompt，使用自定义prompt
+  if (customPrompt) {
+    visualPrompt = customPrompt;
+  }
+
+  // 视角提示词映射
+  const viewPrompts = {
+    front: ', front view, facing the camera directly, full face visible, centered composition',
+    side: ', side profile view, 90 degree angle, showing full side profile',
+    back: ', back view, showing character from behind, no face visible'
+  };
+  
+  // 添加视角提示词（如果有）
+  if (view_type && viewPrompts[view_type]) {
+    visualPrompt = visualPrompt + viewPrompts[view_type];
+    console.log('[ImageService] 添加视角提示词: ' + view_type);
+  }
 
   // 生成图片
   const result = await generateImage({ prompt: visualPrompt });
   
   // 下载到本地
   const timestamp = Date.now();
-  const filename = 'char-' + characterId + '-' + (variationId || 'base') + '-' + timestamp + '.png';
+  const viewSuffix = view_type ? '-' + view_type : '';
+  const filename = 'char-' + characterId + viewSuffix + '-' + (variationId || 'base') + '-' + timestamp + '.png';
   const localPath = path.join(__dirname, '../uploads/images', filename);
   const relativePath = '/uploads/images/' + filename;
   
   await downloadImage(result.url, localPath);
   
-  // 更新角色表中的图片URL
-  await pool.query(
-    'UPDATE characters SET image_url = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-    [relativePath, characterId]
-  );
+  // 根据视角类型更新对应的字段
+  if (view_type) {
+    const fieldMap = {
+      front: 'front_image_url',
+      side: 'side_image_url',
+      back: 'back_image_url'
+    };
+    const field = fieldMap[view_type];
+    if (field) {
+      await pool.query(
+        `UPDATE characters SET ${field} = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
+        [relativePath, characterId]
+      );
+    }
+  } else {
+    // 默认更新image_url
+    await pool.query(
+      'UPDATE characters SET image_url = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+      [relativePath, characterId]
+    );
+  }
 
   return { 
     imageUrl: relativePath,
@@ -204,9 +243,10 @@ async function generateCharacterImage(characterId, variationId = null) {
 /**
  * 生成分镜图片
  * @param {number} shotId - 镜头ID
+ * @param {string} [visualContinuityPrompt] - 视觉连续性提示词（可选）
  * @returns {Promise<Object>} { imageUrl: 本地路径 }
  */
-async function generateShotImage(shotId) {
+async function generateShotImage(shotId, visualContinuityPrompt) {
   // 获取镜头信息
   const shotResult = await pool.query(
     'SELECT * FROM shots WHERE id = $1',
@@ -220,10 +260,16 @@ async function generateShotImage(shotId) {
   const shot = shotResult.rows[0];
   
   // 使用 image_prompt 或 visual_prompt
-  const prompt = shot.image_prompt || shot.visual_prompt;
+  let prompt = shot.image_prompt || shot.visual_prompt;
   
   if (!prompt) {
     throw new Error('镜头没有图片提示词，请先设置 image_prompt');
+  }
+  
+  // 添加视觉连续性提示词（如果有）
+  if (visualContinuityPrompt) {
+    prompt = `${prompt}, ${visualContinuityPrompt}`;
+    console.log('[ImageService] 添加视觉连续性提示词: ' + visualContinuityPrompt);
   }
 
   // 生成图片

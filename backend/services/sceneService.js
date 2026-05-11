@@ -115,13 +115,46 @@ async function regenerateStoryboard({ userId, scriptId }) {
   }
 }
 
-async function updateScene({ userId, id, title, location, timeOfDay, content, characters }) {
+async function updateScene({ userId, id, title, location, timeOfDay, content, characters, sceneImageUrl }) {
+  // 构建动态更新字段
+  const updates = [];
+  const values = [];
+  let paramIndex = 1;
+  
+  if (title !== undefined) {
+    updates.push(`title = $${paramIndex++}`);
+    values.push(title);
+  }
+  if (location !== undefined) {
+    updates.push(`location = $${paramIndex++}`);
+    values.push(location);
+  }
+  if (timeOfDay !== undefined) {
+    updates.push(`time_of_day = $${paramIndex++}`);
+    values.push(timeOfDay);
+  }
+  if (content !== undefined) {
+    updates.push(`content = $${paramIndex++}`);
+    values.push(content);
+  }
+  if (characters !== undefined) {
+    updates.push(`characters = $${paramIndex++}`);
+    values.push(characters);
+  }
+  if (sceneImageUrl !== undefined) {
+    updates.push(`scene_image_url = $${paramIndex++}`);
+    values.push(sceneImageUrl);
+  }
+  
+  if (updates.length === 0) {
+    return null;
+  }
+  
+  values.push(id, userId);
+  
   const result = await pool.query(
-    `UPDATE scenes
-     SET title = $1, location = $2, time_of_day = $3, content = $4, characters = $5
-     WHERE id = $6 AND user_id = $7
-     RETURNING *`,
-    [title, location, timeOfDay, content, characters, id, userId]
+    `UPDATE scenes SET ${updates.join(', ')} WHERE id = $${paramIndex++} AND user_id = $${paramIndex} RETURNING *`,
+    values
   );
   return result.rows[0] || null;
 }

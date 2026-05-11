@@ -49,6 +49,7 @@ async function generate(req, res) {
 async function generateShot(req, res) {
   try {
     const { shotId } = req.params;
+    const { visualContinuityPrompt } = req.body || {};
     
     if (!shotId) {
       return res.status(400).json({ 
@@ -57,7 +58,10 @@ async function generateShot(req, res) {
       });
     }
 
-    const result = await imageService.generateShotImage(parseInt(shotId));
+    const result = await imageService.generateShotImage(
+      parseInt(shotId), 
+      visualContinuityPrompt
+    );
 
     res.json({
       success: true,
@@ -80,7 +84,7 @@ async function generateShot(req, res) {
 async function generateCharacter(req, res) {
   try {
     const { characterId } = req.params;
-    const { variation_id } = req.body;
+    const { variation_id, view_type, prompt } = req.body || {};
     
     if (!characterId) {
       return res.status(400).json({ 
@@ -91,7 +95,8 @@ async function generateCharacter(req, res) {
 
     const result = await imageService.generateCharacterImage(
       parseInt(characterId), 
-      variation_id ? parseInt(variation_id) : null
+      variation_id ? parseInt(variation_id) : null,
+      { view_type, prompt }
     );
 
     res.json({

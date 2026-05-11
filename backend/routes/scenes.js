@@ -10,4 +10,6 @@ router.put('/:id', sceneController.update);
 
 router.delete('/:id', sceneController.remove);
 
+router.post('/:id/generate-image', sceneController.generateImage);
+
 module.exports = router;

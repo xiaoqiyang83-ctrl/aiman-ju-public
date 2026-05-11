@@ -78,6 +78,7 @@ CREATE TABLE IF NOT EXISTS scenes (
     content TEXT DEFAULT '',
     characters TEXT DEFAULT '',
     status VARCHAR(20) DEFAULT 'pending',
+    scene_image_url TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

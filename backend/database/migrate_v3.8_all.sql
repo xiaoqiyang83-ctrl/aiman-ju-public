@@ -216,3 +216,6 @@ CREATE TRIGGER update_exports_updated_at
   BEFORE UPDATE ON exports
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
+
+-- v3.9: 为scenes表添加场景参考图字段
+ALTER TABLE scenes ADD COLUMN IF NOT EXISTS scene_image_url TEXT;
