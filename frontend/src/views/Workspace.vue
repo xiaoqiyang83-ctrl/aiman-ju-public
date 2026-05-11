@@ -1796,6 +1796,7 @@ const selectedShotIds = ref([])
 // ==================== 视频相关 ====================
 const loadingVideos = ref(false)
 const videoList = ref([])
+const videoListKey = ref('')
 const selectedVideos = ref([])
 
 // ==================== 音频相关 ====================
@@ -1931,6 +1932,11 @@ watch(() => userStore.showShotDetailSignal, () => {
 // 监听当前项目变化
 watch(() => userStore.currentProject, (newProject) => {
   if (newProject?.id) {
+    videoList.value = []
+    videoListKey.value = ''
+    shotCount.value = 0
+    scenes.value = []
+    sceneCount.value = 0
     loadAllData()
   }
 }, { deep: true })
@@ -2933,10 +2939,12 @@ const handleSaveShot = async () => {
 const loadShots = async (forceReload = false) => {
   if (!currentScriptId.value) {
     videoList.value = []
+    videoListKey.value = ''
+    shotCount.value = 0
     return
   }
-  // 如果已有数据且非强制刷新，跳过
-  if (!forceReload && videoList.value.length > 0) return
+  const key = `${userStore.currentProject?.id || ''}:${currentScriptId.value || ''}`
+  if (!forceReload && videoList.value.length > 0 && videoListKey.value === key) return
   loadingVideos.value = true
   try {
     if (!scenes.value.length) {
@@ -2964,6 +2972,7 @@ const loadShots = async (forceReload = false) => {
       return (Number(a.shot_number) || 0) - (Number(b.shot_number) || 0)
     })
     videoList.value = allShots
+    videoListKey.value = key
     shotCount.value = allShots.length
   } finally {
     loadingVideos.value = false
