@@ -51,7 +51,7 @@ const AI_CONFIG = {
     'zhipu': {
         baseURL: process.env.ZHIPU_BASE_URL || 'https://open.bigmodel.cn/api/paas/v4',
         apiKey: process.env.ZHIPU_API_KEY || '',
-        model: process.env.ZHIPU_MODEL || 'glm-4-flash',
+        model: process.env.ZHIPU_MODEL || 'glm-4-flashx',
         timeout: 300000
     },
     // 通义千问配置
