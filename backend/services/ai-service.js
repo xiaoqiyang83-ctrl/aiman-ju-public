@@ -422,7 +422,6 @@ const generateTextWithProvider = async (provider, { system, user, temperature = 
             messages,
             temperature,
             max_tokens: maxTokens,
-            response_format: { type: 'json_object' }
         };
 
         const url = new URL('/chat/completions', config.baseURL);
