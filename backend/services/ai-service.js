@@ -4,7 +4,7 @@
  * 包含错误处理、重试机制、Token计算
  */
 
-async function fetchJson(url, { method = 'POST', headers = {}, body, timeout = 60000 } = {}) {
+async function fetchJson(url, { method = 'POST', headers = {}, body, timeout = 120000 } = {}) {
     const controller = new AbortController();
     const t = setTimeout(() => controller.abort(), timeout);
     try {
@@ -52,7 +52,7 @@ const AI_CONFIG = {
         baseURL: process.env.ZHIPU_BASE_URL || 'https://open.bigmodel.cn/api/paas/v4',
         apiKey: process.env.ZHIPU_API_KEY || '',
         model: process.env.ZHIPU_MODEL || 'glm-4-flash',
-        timeout: 60000
+        timeout: 120000
     },
     // 通义千问配置
     'qwen': {
