@@ -83,10 +83,10 @@ async function generateShot(req, res) {
  */
 async function generateCharacter(req, res) {
   try {
-    const { characterId } = req.params;
+    const { id } = req.params;  // 从characters路由来，参数名是:id，不是:characterId
     const { variation_id, view_type, prompt } = req.body || {};
     
-    if (!characterId) {
+    if (!id) {
       return res.status(400).json({ 
         success: false, 
         message: '缺少characterId' 
@@ -94,7 +94,7 @@ async function generateCharacter(req, res) {
     }
 
     const result = await imageService.generateCharacterImage(
-      parseInt(characterId), 
+      parseInt(id), 
       variation_id ? parseInt(variation_id) : null,
       { view_type, prompt }
     );
