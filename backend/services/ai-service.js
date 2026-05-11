@@ -650,20 +650,23 @@ function extractFirstJsonObject(text) {
 
 function parseJsonWithFallback(jsonText) {
     if (!jsonText) throw new Error('AI返回内容无法解析为JSON');
-    
+
+    // 第一次：直接解析
     try {
         return JSON.parse(jsonText);
     } catch (e) {
         console.log('[AI Service] 首次JSON解析失败，尝试修复...');
     }
-    
+
+    // 第二次：清理控制字符
     try {
         var cleaned = jsonText.replace(/[\x00-\x1f]/g, ' ');
         return JSON.parse(cleaned);
     } catch (e) {
-        console.log('[AI Service] 二次清理后仍失败，尝试暴力修复...');
+        console.log('[AI Service] 二次清理后仍失败，尝试补括号修复...');
     }
-    
+
+    // 第三次：清理尾逗号 + 补括号
     try {
         var fixed = jsonText.replace(/,(\s*[}\]])/g, '$1');
         var openBraces = (fixed.match(/{/g) || []).length;
@@ -674,9 +677,93 @@ function parseJsonWithFallback(jsonText) {
         while (closeBrackets < openBrackets) { fixed += ']'; closeBrackets++; }
         return JSON.parse(fixed);
     } catch (e) {
-        console.error('[AI Service] JSON暴力修复失败，原始内容前300字符:', jsonText.slice(0, 300));
-        throw new Error('AI返回JSON解析失败: ' + e.message);
+        console.log('[AI Service] 补括号修复失败，尝试智能截断...');
     }
+
+    // 第四次：智能截断修复
+    try {
+        var truncated = repairTruncatedJson(jsonText);
+        if (truncated) return truncated;
+    } catch (e) {
+        console.log('[AI Service] 智能截断修复失败');
+    }
+
+    console.error('[AI Service] JSON全部修复尝试失败，原始内容前300字符:', jsonText.slice(0, 300));
+    throw new Error('AI返回JSON解析失败（输出可能被截断，可尝试缩短剧本或分段拆分）');
+}
+
+/**
+ * 智能截断修复：JSON被截断时，回退到最后一个完整对象，补齐闭合
+ */
+function repairTruncatedJson(jsonText) {
+    if (!jsonText) return null;
+
+    // 压缩空白方便定位
+    var compressed = jsonText.replace(/\s+/g, ' ').trim();
+
+    // 策略1：找最后一个完整shot对象
+    var lastShotEnd = findLastCompleteObject(compressed, ['shot_number', 'dialogue']);
+    if (lastShotEnd > 0) {
+        var repaired = compressed.substring(0, lastShotEnd + 1);
+        repaired = repaired.replace(/,\s*$/, '');
+        repaired += ']}]}';
+        repaired = repaired.replace(/,(\s*[}\]])/g, '$1');
+        try {
+            var result = JSON.parse(repaired);
+            if (result.scenes && result.scenes[0] && result.scenes[0].shots && result.scenes[0].shots.length > 0) {
+                console.log('[AI Service] 智能截断修复成功（镜头级别），保留了' + result.scenes[0].shots.length + '个镜头');
+                return result;
+            }
+        } catch (e) {
+            console.log('[AI Service] 镜头级截断修复失败，尝试暴力回退...');
+        }
+    }
+
+    // 策略2：暴力回退——从后往前找}逐个尝试截断+补闭合
+    for (var i = compressed.length - 1; i >= Math.max(0, compressed.length - 10000); i--) {
+        if (compressed[i] === '}') {
+            var candidate = compressed.substring(0, i + 1);
+            candidate = candidate.replace(/,\s*$/, '');
+            var ob = (candidate.match(/{/g) || []).length;
+            var cb = (candidate.match(/}/g) || []).length;
+            var obr = (candidate.match(/\[/g) || []).length;
+            var cbr = (candidate.match(/]/g) || []).length;
+            while (cbr < obr) { candidate += ']'; cbr++; }
+            while (cb < ob) { candidate += '}'; cb++; }
+            candidate = candidate.replace(/,(\s*[}\]])/g, '$1');
+            try {
+                var result2 = JSON.parse(candidate);
+                if (result2.scenes && result2.scenes.length > 0 && result2.scenes[0].shots && result2.scenes[0].shots.length > 0) {
+                    console.log('[AI Service] 暴力回退修复成功，保留了' + result2.scenes.length + '个场景');
+                    return result2;
+                }
+            } catch (e) {
+                // 继续尝试
+            }
+        }
+    }
+
+    return null;
+}
+
+/**
+ * 从压缩文本中找最后一个包含指定字段的完整JSON对象的结束位置
+ */
+function findLastCompleteObject(text, requiredFields) {
+    for (var i = text.length - 1; i >= 0; i--) {
+        if (text[i] === '}') {
+            var checkRange = text.substring(Math.max(0, i - 3000), i + 1);
+            var allFound = true;
+            for (var f = 0; f < requiredFields.length; f++) {
+                if (checkRange.indexOf('"' + requiredFields[f] + '"') < 0) {
+                    allFound = false;
+                    break;
+                }
+            }
+            if (allFound) return i;
+        }
+    }
+    return -1;
 }
 
 // ==================== 数据标准化 ====================
