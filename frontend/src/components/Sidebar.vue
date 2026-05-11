@@ -1,11 +1,14 @@
 <template>
-  <el-aside class="sidebar" width="240px">
+  <el-aside class="sidebar" :width="collapsed ? '64px' : '240px'">
+    <div class="collapse-toggle" @click="collapsed = !collapsed">
+      <el-icon><component :is="collapsed ? 'DArrowRight' : 'DArrowLeft'" /></el-icon>
+    </div>
     <!-- Logo区域 -->
-    <div class="sidebar-logo">
+    <div class="sidebar-logo" :class="{ 'logo-collapsed': collapsed }">
       <div class="logo-icon">
         <span class="logo-icon-text">AI</span>
       </div>
-      <div class="logo-text">
+      <div class="logo-text" v-show="!collapsed">
         <span class="logo-title">AI漫剧制作工具</span>
         <span class="logo-subtitle">一站式AI漫剧创作平台</span>
       </div>
@@ -19,7 +22,7 @@
         background-color="#1a1f36"
         text-color="#a0a9c4"
         active-text-color="#ffffff"
-        :collapse="false"
+        :collapse="collapsed"
         @select="handleSelect"
       >
         <!-- 基础入口 -->
@@ -101,12 +104,12 @@
     </el-scrollbar>
 
     <!-- 用户信息和登出 -->
-    <div class="sidebar-user">
+    <div class="sidebar-user" :class="{ 'user-collapsed': collapsed }">
       <div class="user-info">
         <div class="user-avatar">
           <el-icon><UserFilled /></el-icon>
         </div>
-        <div class="user-details">
+        <div class="user-details" v-show="!collapsed">
           <span class="user-name">{{ userName }}</span>
           <el-tag v-if="isVip" type="warning" size="small">VIP</el-tag>
         </div>
@@ -117,7 +120,7 @@
     </div>
 
     <!-- 底部存储用量 -->
-    <div class="sidebar-footer">
+    <div class="sidebar-footer" v-show="!collapsed">
       <div class="storage-info">
         <div class="storage-header">
           <el-icon><Folder /></el-icon>
@@ -145,6 +148,7 @@ import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
 import { ElMessageBox } from 'element-plus'
+import { ref } from 'vue'
 import {
   HomeFilled,
   Folder,
@@ -160,8 +164,12 @@ import {
   Coin,
   Clock,
   Setting,
-  SwitchButton
+  SwitchButton,
+  DArrowLeft,
+  DArrowRight
 } from '@element-plus/icons-vue'
+
+const collapsed = ref(false)
 
 const props = defineProps({
   activeModule: {
@@ -380,5 +388,45 @@ const storageColor = computed(() => {
 
 .storage-total {
   color: #606885;
+}
+
+/* 折叠切换按钮 */
+.collapse-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  cursor: pointer;
+  color: #a0a9c4;
+  transition: color 0.2s;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.collapse-toggle:hover {
+  color: #ffffff;
+}
+
+/* Logo折叠状态 */
+.sidebar-logo.logo-collapsed {
+  justify-content: center;
+  padding: 20px 12px;
+}
+
+/* 用户区折叠状态 */
+.sidebar-user.user-collapsed {
+  justify-content: center;
+  padding: 12px;
+}
+
+/* 折叠时section标题隐藏 */
+.sidebar :deep(.menu-section-title) {
+  transition: opacity 0.2s;
+}
+.sidebar .el-menu--collapse :deep(.menu-section-title) {
+  display: none;
+}
+
+/* transition */
+.sidebar {
+  transition: width 0.3s;
 }
 </style>
