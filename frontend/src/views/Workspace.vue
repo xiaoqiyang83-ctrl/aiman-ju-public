@@ -4652,6 +4652,20 @@ const handleMoveShot = async (scene, shot, direction) => {
   color: #409eff;
 }
 
+/* 确保 el-icon 组件样式正确穿透 */
+.op-btn :deep(.el-icon) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  color: inherit;
+}
+
+.op-btn :deep(.el-icon svg) {
+  width: 18px;
+  height: 18px;
+}
+
 .op-btn span {
   font-size: 12px;
   color: #606266;
