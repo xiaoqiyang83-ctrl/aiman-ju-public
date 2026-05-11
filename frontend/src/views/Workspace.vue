@@ -4624,16 +4624,19 @@ const handleMoveShot = async (scene, shot, direction) => {
 }
 
 .op-btn {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 5px;
-  padding: 12px 6px;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px;
+  padding: 12px 8px;
   background: #f5f7fa;
   border: 2px solid #d5dae0;
   border-radius: 10px;
   cursor: pointer;
   transition: all 0.2s;
+  height: auto !important;
+  width: 100%;
 }
 
 .op-btn:hover {
@@ -4641,6 +4644,11 @@ const handleMoveShot = async (scene, shot, direction) => {
   border-color: #409eff;
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(64, 158, 255, 0.2);
+}
+
+.op-btn :deep(.el-icon) {
+  margin: 0 !important;
+  font-size: 20px;
 }
 
 .op-icon {
@@ -4653,12 +4661,16 @@ const handleMoveShot = async (scene, shot, direction) => {
   font-size: 20px;
   color: #409eff;
   background: linear-gradient(135deg, #ecf5ff 0%, #d9ecff 100%);
+  flex-shrink: 0;
 }
 
-.op-btn span {
+.op-btn span,
+.op-btn .op-icon + span {
   font-size: 12px;
   font-weight: 600;
   color: #404758;
+  margin-top: 2px;
+  text-align: center;
 }
 
 /* 中列内容区 */
