@@ -112,7 +112,15 @@ export const charactersAPI = {
   create: (data) => api.post('/characters', data),
   update: (id, data) => api.put(`/characters/${id}`, data),
   delete: (id) => api.delete(`/characters/${id}`),
-  aiGenerate: (id, data) => api.post(`/characters/${id}/ai-generate`, data)
+  aiGenerate: (id, data) => api.post(`/characters/${id}/ai-generate`, data),
+  // v5.0 角色一致性系统
+  calibrate: (id) => api.post(`/characters/${id}/calibrate`),
+  compilePrompt: (id, data) => api.post(`/characters/${id}/compile-prompt`, data),
+  // 变体CRUD
+  listVariations: (characterId) => api.get(`/characters/${characterId}/variations`),
+  createVariation: (characterId, data) => api.post(`/characters/${characterId}/variations`, data),
+  updateVariation: (id, data) => api.put(`/characters/${characterId}/variations/${id}`, data),
+  deleteVariation: (id) => api.delete(`/characters/${characterId}/variations/${id}`)
 }
 
 // ==================== 场景相关 ====================

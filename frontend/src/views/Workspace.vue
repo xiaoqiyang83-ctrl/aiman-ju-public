@@ -324,6 +324,7 @@
                       <span>{{ char.costumes?.length || 0 }} 换装</span>
                     </div>
                     <div class="char-actions-enhanced">
+                      <el-button size="small" type="warning" link @click.stop="handleCalibrateCharacter(char)" :loading="calibratingCharacter[char.id]">校准</el-button>
                       <el-button size="small" type="primary" link :icon="Edit" @click.stop="handleEditCharacter(char)">编辑</el-button>
                       <el-button size="small" type="danger" link :icon="Delete" @click.stop="handleDeleteCharacter(char)">删除</el-button>
                     </div>
@@ -1386,6 +1387,8 @@
               <div class="char-tags-large">
                 <el-tag v-if="selectedCharacter.gender" type="info">{{ selectedCharacter.gender }}</el-tag>
                 <el-tag v-if="selectedCharacter.occupation" type="warning">{{ selectedCharacter.occupation }}</el-tag>
+                <el-tag v-if="selectedCharacter.identity_anchors && Object.keys(selectedCharacter.identity_anchors).length > 0" type="success" effect="dark">已校准</el-tag>
+                <el-tag v-else type="danger">未校准</el-tag>
               </div>
               <p v-if="selectedCharacter.description" class="char-desc">{{ selectedCharacter.description }}</p>
               
@@ -1435,10 +1438,110 @@
             <div class="character-actions">
               <el-button type="primary" @click="handleEditCharacter(selectedCharacter)">编辑角色</el-button>
               <el-button type="success" @click="handleGenCharImage(selectedCharacter)">AI生成图</el-button>
+              <el-button type="warning" @click="handleCalibrateCharacter(selectedCharacter)" :loading="calibratingCharacter[selectedCharacter.id]">
+                <el-icon><MagicStick /></el-icon>
+                AI校准
+              </el-button>
+              <el-button type="info" @click="showVariationsDialog(selectedCharacter)">
+                <el-icon><Grid /></el-icon>
+                变体管理
+              </el-button>
+            </div>
+            <!-- 6层锚点展示 -->
+            <div v-if="selectedCharacter.identity_anchors" class="anchors-display">
+              <h5>6层身份锚点</h5>
+              <div class="anchors-grid">
+                <div class="anchor-item" v-if="selectedCharacter.identity_anchors.gender">
+                  <span class="anchor-label">性别</span>
+                  <span class="anchor-value">{{ selectedCharacter.identity_anchors.gender }}</span>
+                </div>
+                <div class="anchor-item" v-if="selectedCharacter.identity_anchors.age">
+                  <span class="anchor-label">年龄</span>
+                  <span class="anchor-value">{{ selectedCharacter.identity_anchors.age }}</span>
+                </div>
+                <div class="anchor-item" v-if="selectedCharacter.identity_anchors.physique">
+                  <span class="anchor-label">体型</span>
+                  <span class="anchor-value">{{ selectedCharacter.identity_anchors.physique }}</span>
+                </div>
+                <div class="anchor-item" v-if="selectedCharacter.identity_anchors.face">
+                  <span class="anchor-label">面部</span>
+                  <span class="anchor-value">{{ selectedCharacter.identity_anchors.face }}</span>
+                </div>
+                <div class="anchor-item" v-if="selectedCharacter.identity_anchors.hair">
+                  <span class="anchor-label">发型</span>
+                  <span class="anchor-value">{{ selectedCharacter.identity_anchors.hair }}</span>
+                </div>
+                <div class="anchor-item" v-if="selectedCharacter.identity_anchors.clothing">
+                  <span class="anchor-label">服饰</span>
+                  <span class="anchor-value">{{ selectedCharacter.identity_anchors.clothing }}</span>
+                </div>
+              </div>
             </div>
           </div>
           
-          <div v-if="!currentPreviewVideo && !selectedCharacter" class="empty-panel">
+          <!-- v5.0 角色变体管理弹窗 -->
+    <el-dialog v-model="showVariationsDialogFlag" title="角色变体管理" width="700px">
+      <div class="variations-header">
+        <el-button type="primary" @click="handleCreateVariation">
+          <el-icon><Plus /></el-icon>
+          添加变体
+        </el-button>
+      </div>
+      <el-table :data="currentCharacterVariations" style="width: 100%" v-loading="loadingVariations">
+        <el-table-column prop="name" label="变体名称" width="120" />
+        <el-table-column label="类型" width="100">
+          <template #default="{ row }">
+            <el-tag :type="row.is_stage_variation ? 'warning' : 'success'" size="small">
+              {{ row.is_stage_variation ? '阶段变体' : '换装变体' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="episode_range" label="集数范围" width="100" />
+        <el-table-column prop="description" label="描述" />
+        <el-table-column label="操作" width="150" fixed="right">
+          <template #default="{ row }">
+            <el-button size="small" type="primary" link @click="handleCompileVariationPrompt(row)">编译提示词</el-button>
+            <el-button size="small" type="danger" link @click="handleDeleteVariation(row)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-dialog>
+
+    <!-- v5.0 创建/编辑变体弹窗 -->
+    <el-dialog v-model="showVariationFormDialog" :title="editingVariation ? '编辑变体' : '创建变体'" width="500px">
+      <el-form :model="variationForm" label-width="100px">
+        <el-form-item label="变体名称">
+          <el-input v-model="variationForm.name" placeholder="如：日常装、少年时期" />
+        </el-form-item>
+        <el-form-item label="变体类型">
+          <el-radio-group v-model="variationForm.is_stage_variation">
+            <el-radio :value="false">换装变体</el-radio>
+            <el-radio :value="true">阶段变体</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item v-if="variationForm.is_stage_variation" label="年龄描述">
+          <el-input v-model="variationForm.age_description" placeholder="如：少年时期" />
+        </el-form-item>
+        <el-form-item v-if="variationForm.is_stage_variation" label="阶段描述">
+          <el-input v-model="variationForm.stage_description" placeholder="如：第一次变身" />
+        </el-form-item>
+        <el-form-item label="集数范围">
+          <el-input v-model="variationForm.episode_range" placeholder="如：1-10" />
+        </el-form-item>
+        <el-form-item label="变体描述">
+          <el-input v-model="variationForm.description" type="textarea" :rows="2" placeholder="变体描述" />
+        </el-form-item>
+        <el-form-item label="视觉提示词(中)">
+          <el-input v-model="variationForm.visual_prompt_zh" type="textarea" :rows="2" placeholder="中文视觉提示词" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showVariationFormDialog = false">取消</el-button>
+        <el-button type="primary" @click="handleSaveVariation" :loading="savingVariation">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <div v-if="!currentPreviewVideo && !selectedCharacter" class="empty-panel">
             <el-empty description="点击预览按钮查看详情" />
           </div>
         </div>
@@ -1733,6 +1836,7 @@ const showCharacterDialog = ref(false)
 const creatingCharacter = ref(false)
 const generatingImage = reactive({})
 const generatingRetry = reactive({})
+const calibratingCharacter = reactive({})
 const isEditingCharacter = ref(false)
 const currentEditingCharacter = ref(null)
 const charForm = reactive({
@@ -1748,6 +1852,23 @@ const charForm = reactive({
   expressions: [],
   costumes: [],
   raw_file: null
+})
+
+// v5.0 变体相关状态
+const showVariationsDialogFlag = ref(false)
+const currentCharacterVariations = ref([])
+const loadingVariations = ref(false)
+const showVariationFormDialog = ref(false)
+const editingVariation = ref(null)
+const savingVariation = ref(false)
+const variationForm = reactive({
+  name: '',
+  description: '',
+  is_stage_variation: false,
+  episode_range: '',
+  age_description: '',
+  stage_description: '',
+  visual_prompt_zh: ''
 })
 
 const filteredCharacters = computed(() => {
@@ -5348,3 +5469,45 @@ const handleMoveShot = async (scene, shot, direction) => {
   position: relative;
 }
 </style>
+
+/* v5.0 角色一致性系统样式 */
+.anchors-display {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #eee;
+}
+.anchors-display h5 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  color: #606266;
+}
+.anchors-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+.anchor-item {
+  background: #f5f7fa;
+  border-radius: 4px;
+  padding: 8px;
+}
+.anchor-label {
+  display: block;
+  font-size: 12px;
+  color: #909399;
+  margin-bottom: 4px;
+}
+.anchor-value {
+  font-size: 12px;
+  color: #303133;
+  line-height: 1.4;
+}
+
+/* 变体管理弹窗样式 */
+.variations-header {
+  margin-bottom: 16px;
+}
+.variations-header .el-button {
+  margin-right: 8px;
+}
+

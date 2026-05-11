@@ -1,4 +1,5 @@
 const characterService = require('../services/characterService');
+const aiService = require('../services/ai-service');
 
 const userId = 1;
 
@@ -35,6 +36,17 @@ async function create(req, res) {
       back_image_url,
       expressions,
       costumes,
+      // v5.0 新增字段
+      identity_anchors,
+      negative_prompt,
+      consistency_elements,
+      gender,
+      age,
+      personality,
+      role_desc,
+      appearance,
+      visual_prompt_en,
+      visual_prompt_zh,
     } = req.body;
 
     if (!script_id) {
@@ -52,6 +64,16 @@ async function create(req, res) {
       backImageUrl: back_image_url,
       expressions,
       costumes,
+      identityAnchors: identity_anchors,
+      negativePrompt: negative_prompt,
+      consistencyElements: consistency_elements,
+      gender,
+      age,
+      personality,
+      roleDesc: role_desc,
+      appearance,
+      visualPromptEn: visual_prompt_en,
+      visualPromptZh: visual_prompt_zh,
     });
 
     res.json({ success: true, data: row });
@@ -63,8 +85,28 @@ async function create(req, res) {
 
 async function update(req, res) {
   try {
-    const { name, description, image_url, front_image_url, side_image_url, back_image_url, expressions, costumes } =
-      req.body;
+    const {
+      name,
+      description,
+      image_url,
+      front_image_url,
+      side_image_url,
+      back_image_url,
+      expressions,
+      costumes,
+      // v5.0 新增字段
+      identity_anchors,
+      negative_prompt,
+      consistency_elements,
+      gender,
+      age,
+      personality,
+      role_desc,
+      appearance,
+      visual_prompt_en,
+      visual_prompt_zh,
+    } = req.body;
+
     const row = await characterService.updateCharacter({
       userId,
       id: req.params.id,
@@ -76,7 +118,18 @@ async function update(req, res) {
       backImageUrl: back_image_url,
       expressions,
       costumes,
+      identityAnchors: identity_anchors,
+      negativePrompt: negative_prompt,
+      consistencyElements: consistency_elements,
+      gender,
+      age,
+      personality,
+      roleDesc: role_desc,
+      appearance,
+      visualPromptEn: visual_prompt_en,
+      visualPromptZh: visual_prompt_zh,
     });
+
     if (!row) {
       return res.status(404).json({ success: false, message: '角色不存在' });
     }
@@ -154,6 +207,248 @@ async function aiGenerate(req, res) {
   }
 }
 
+// ==================== v5.0 AI角色校准接口 ====================
+
+/**
+ * 触发AI校准 - 生成6层身份锚点
+ * POST /api/characters/:id/calibrate
+ */
+async function calibrate(req, res) {
+  try {
+    const character = await characterService.getCharacter({ userId, id: req.params.id });
+    
+    if (!character) {
+      return res.status(404).json({ success: false, message: '角色不存在' });
+    }
+
+    // 检查AI服务是否配置
+    if (!aiService.isConfigured()) {
+      return res.status(503).json({ 
+        success: false, 
+        message: 'AI服务未配置，请先配置API密钥' 
+      });
+    }
+
+    console.log('[Character Calibrate] 开始校准角色:', character.name);
+
+    // 调用AI校准函数
+    const result = await aiService.calibrateCharacterAnchors(
+      {
+        name: character.name,
+        description: character.description,
+        appearance: character.appearance,
+        gender: character.gender,
+        age: character.age,
+        personality: character.personality,
+        role_desc: character.role_desc
+      },
+      aiService.generateText
+    );
+
+    console.log('[Character Calibrate] 校准完成:', result);
+
+    // 更新角色记录
+    const updated = await characterService.updateCharacter({
+      userId,
+      id: req.params.id,
+      identityAnchors: result.identity_anchors,
+      negativePrompt: result.negative_prompt,
+      consistencyElements: result.consistency_elements
+    });
+
+    res.json({
+      success: true,
+      message: 'AI校准完成',
+      data: {
+        character_id: req.params.id,
+        identity_anchors: result.identity_anchors,
+        negative_prompt: result.negative_prompt,
+        consistency_elements: result.consistency_elements
+      }
+    });
+  } catch (err) {
+    console.error('[Character Calibrate] 校准失败:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+}
+
+/**
+ * 编译视觉提示词
+ * POST /api/characters/:id/compile-prompt
+ */
+async function compilePrompt(req, res) {
+  try {
+    const character = await characterService.getCharacter({ userId, id: req.params.id });
+    
+    if (!character) {
+      return res.status(404).json({ success: false, message: '角色不存在' });
+    }
+
+    const { variation_id } = req.body;
+    let variation = null;
+
+    // 如果指定了变体，获取变体信息
+    if (variation_id) {
+      variation = await characterService.getVariation({ userId, id: variation_id });
+      if (!variation) {
+        return res.status(404).json({ success: false, message: '变体不存在' });
+      }
+    }
+
+    console.log('[Character Compile] 编译提示词:', character.name, variation ? `变体:${variation.name}` : '');
+
+    // 调用编译函数
+    const result = aiService.compileCharacterPrompt(character, variation);
+
+    // 可选：保存编译结果到角色
+    if (req.body.save) {
+      await characterService.updateCharacter({
+        userId,
+        id: req.params.id,
+        visualPromptEn: result.visual_prompt_en,
+        visualPromptZh: result.visual_prompt_zh
+      });
+    }
+
+    res.json({
+      success: true,
+      message: '提示词编译完成',
+      data: {
+        character_id: req.params.id,
+        variation_id: variation_id || null,
+        visual_prompt_en: result.visual_prompt_en,
+        visual_prompt_zh: result.visual_prompt_zh,
+        negative_prompt_en: result.negative_prompt_en
+      }
+    });
+  } catch (err) {
+    console.error('[Character Compile] 编译失败:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+}
+
+// ==================== v5.0 角色变体 CRUD ====================
+
+async function listVariations(req, res) {
+  try {
+    const { character_id } = req.params;
+    const rows = await characterService.listVariations({ userId, characterId: character_id });
+    if (rows === null) {
+      return res.status(404).json({ success: false, message: '角色不存在' });
+    }
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    console.error('[Character Variations] 操作失败:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+}
+
+async function getVariation(req, res) {
+  try {
+    const { character_id, id } = req.params;
+    const row = await characterService.getVariation({ userId, id, characterId: character_id });
+    if (!row) {
+      return res.status(404).json({ success: false, message: '变体不存在' });
+    }
+    res.json({ success: true, data: row });
+  } catch (err) {
+    console.error('[Character Variations] 操作失败:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+}
+
+async function createVariation(req, res) {
+  try {
+    const { character_id } = req.params;
+    const {
+      name,
+      description,
+      visual_prompt,
+      visual_prompt_zh,
+      reference_image,
+      is_stage_variation,
+      episode_range,
+      age_description,
+      stage_description,
+    } = req.body;
+
+    const row = await characterService.createVariation({
+      userId,
+      characterId: character_id,
+      name,
+      description,
+      visualPrompt: visual_prompt,
+      visualPromptZh: visual_prompt_zh,
+      referenceImage: reference_image,
+      isStageVariation: is_stage_variation,
+      episodeRange: episode_range,
+      ageDescription: age_description,
+      stageDescription: stage_description,
+    });
+
+    if (!row) {
+      return res.status(404).json({ success: false, message: '角色不存在' });
+    }
+    res.json({ success: true, data: row });
+  } catch (err) {
+    console.error('[Character Variations] 操作失败:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+}
+
+async function updateVariation(req, res) {
+  try {
+    const { id } = req.params;
+    const {
+      name,
+      description,
+      visual_prompt,
+      visual_prompt_zh,
+      reference_image,
+      is_stage_variation,
+      episode_range,
+      age_description,
+      stage_description,
+    } = req.body;
+
+    const row = await characterService.updateVariation({
+      userId,
+      id,
+      name,
+      description,
+      visualPrompt: visual_prompt,
+      visualPromptZh: visual_prompt_zh,
+      referenceImage: reference_image,
+      isStageVariation: is_stage_variation,
+      episodeRange: episode_range,
+      ageDescription: age_description,
+      stageDescription: stage_description,
+    });
+
+    if (!row) {
+      return res.status(404).json({ success: false, message: '变体不存在' });
+    }
+    res.json({ success: true, data: row });
+  } catch (err) {
+    console.error('[Character Variations] 操作失败:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+}
+
+async function deleteVariation(req, res) {
+  try {
+    const { id } = req.params;
+    const row = await characterService.deleteVariation({ userId, id });
+    if (!row) {
+      return res.status(404).json({ success: false, message: '变体不存在' });
+    }
+    res.json({ success: true, message: '删除成功' });
+  } catch (err) {
+    console.error('[Character Variations] 操作失败:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+}
+
 module.exports = {
   list,
   get,
@@ -162,5 +457,13 @@ module.exports = {
   remove,
   uploadImage,
   aiGenerate,
+  // v5.0 AI校准
+  calibrate,
+  compilePrompt,
+  // v5.0 变体
+  listVariations,
+  getVariation,
+  createVariation,
+  updateVariation,
+  deleteVariation,
 };
-

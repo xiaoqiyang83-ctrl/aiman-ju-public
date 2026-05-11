@@ -1222,7 +1222,6 @@ module.exports = {
     generateCoverPrompt,
     AI_CONFIG,
     CURRENT_PROVIDER,
-    // 分镜拆分新模块导出
     compileImagePrompt,
     compileVideoPrompt,
     compileEndFramePrompt,
@@ -1238,33 +1237,13 @@ module.exports = {
     STORYBOARD_USER_TEMPLATE
 };
 
+// ==================== v5.0 角色一致性系统 ====================
+
+const { calibrateCharacterAnchors, compileCharacterPrompt } = require('./character_calibration');
+
 module.exports = {
-    isConfigured,
-    getConfig,
-    getServiceStatus,
-    estimateTokens,
-    generateText,
-    generateStoryboardFromScript,
-    generateScript,
-    continueScript,
-    generateDialogue,
-    generateSceneDescription,
-    generateTitle,
-    batchGenerate,
-    generateCoverPrompt,
-    AI_CONFIG,
-    CURRENT_PROVIDER,
-    compileImagePrompt,
-    compileVideoPrompt,
-    compileEndFramePrompt,
-    interpolateTemplate,
-    extractFirstJsonObject,
-    parseJsonWithFallback,
-    normalizeStoryboard,
-    compilePromptsForStoryboard,
-    SHOT_TYPE_MAP,
-    CAMERA_MOVEMENT_MAP,
-    TIME_OF_DAY_MAP,
-    STORYBOARD_SYSTEM_PROMPT,
-    STORYBOARD_USER_TEMPLATE
+    ...module.exports,
+    // v5.0 角色校准
+    calibrateCharacterAnchors,
+    compileCharacterPrompt
 };
