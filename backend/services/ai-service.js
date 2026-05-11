@@ -4,7 +4,7 @@
  * 包含错误处理、重试机制、Token计算
  */
 
-async function fetchJson(url, { method = 'POST', headers = {}, body, timeout = 120000 } = {}) {
+async function fetchJson(url, { method = 'POST', headers = {}, body, timeout = 180000 } = {}) {
     const controller = new AbortController();
     const t = setTimeout(() => controller.abort(), timeout);
     try {
@@ -30,7 +30,7 @@ const AI_CONFIG = {
         baseURL: process.env.SILICONFLOW_BASE_URL || 'https://api.siliconflow.cn/v1',
         apiKey: process.env.SILICONFLOW_API_KEY || '',
         model: process.env.SILICONFLOW_MODEL || 'Qwen/Qwen2.5-7B-Instruct',
-        timeout: 60000
+        timeout: 180000
     },
     // 文心一言配置
     'ernie': {
@@ -38,35 +38,35 @@ const AI_CONFIG = {
         apiKey: process.env.ERNIE_API_KEY || '',
         secretKey: process.env.ERNIE_SECRET_KEY || '',
         model: process.env.ERNIE_MODEL || 'ernie-4.0-8k-latest',
-        timeout: 60000
+        timeout: 180000
     },
     // OpenAI兼容配置
     'openai': {
         baseURL: process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1',
         apiKey: process.env.OPENAI_API_KEY || '',
         model: process.env.OPENAI_MODEL || 'gpt-3.5-turbo',
-        timeout: 60000
+        timeout: 180000
     },
     // 智谱AI配置
     'zhipu': {
         baseURL: process.env.ZHIPU_BASE_URL || 'https://open.bigmodel.cn/api/paas/v4',
         apiKey: process.env.ZHIPU_API_KEY || '',
         model: process.env.ZHIPU_MODEL || 'glm-4-flash',
-        timeout: 120000
+        timeout: 180000
     },
     // 通义千问配置
     'qwen': {
         baseURL: process.env.QWEN_BASE_URL || 'https://dashscope.aliyuncs.com/api/v1',
         apiKey: process.env.QWEN_API_KEY || '',
         model: process.env.QWEN_MODEL || 'qwen-turbo',
-        timeout: 60000
+        timeout: 180000
     },
     // 默认使用硅基流动
     'default': {
         baseURL: process.env.AI_BASE_URL || 'https://api.siliconflow.cn/v1',
         apiKey: process.env.AI_API_KEY || '',
         model: process.env.AI_MODEL || 'Qwen/Qwen2.5-7B-Instruct',
-        timeout: 60000
+        timeout: 180000
     }
 };
 
