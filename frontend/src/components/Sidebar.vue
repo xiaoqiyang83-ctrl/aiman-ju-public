@@ -33,14 +33,14 @@
           <el-menu-item index="workspace">
             <el-tooltip :content="isCollapsed ? '工作台' : ''" placement="right" :disabled="!isCollapsed">
               <el-icon><HomeFilled /></el-icon>
-              <template #title>工作台</template>
             </el-tooltip>
+            <template #title>工作台</template>
           </el-menu-item>
           <el-menu-item index="projects">
             <el-tooltip :content="isCollapsed ? '项目管理' : ''" placement="right" :disabled="!isCollapsed">
               <el-icon><Folder /></el-icon>
-              <template #title>项目管理</template>
             </el-tooltip>
+            <template #title>项目管理</template>
           </el-menu-item>
         </div>
 
@@ -50,32 +50,32 @@
           <el-menu-item index="script">
             <el-tooltip :content="isCollapsed ? '剧本' : ''" placement="right" :disabled="!isCollapsed">
               <el-icon><Document /></el-icon>
-              <template #title>剧本</template>
             </el-tooltip>
+            <template #title>剧本</template>
           </el-menu-item>
           <el-menu-item index="character">
             <el-tooltip :content="isCollapsed ? '角色' : ''" placement="right" :disabled="!isCollapsed">
               <el-icon><User /></el-icon>
-              <template #title>角色</template>
             </el-tooltip>
+            <template #title>角色</template>
           </el-menu-item>
           <el-menu-item index="storyboard">
             <el-tooltip :content="isCollapsed ? '分镜' : ''" placement="right" :disabled="!isCollapsed">
               <el-icon><Grid /></el-icon>
-              <template #title>分镜</template>
             </el-tooltip>
+            <template #title>分镜</template>
           </el-menu-item>
           <el-menu-item index="video">
             <el-tooltip :content="isCollapsed ? '视频生成' : ''" placement="right" :disabled="!isCollapsed">
               <el-icon><VideoPlay /></el-icon>
-              <template #title>视频生成</template>
             </el-tooltip>
+            <template #title>视频生成</template>
           </el-menu-item>
           <el-menu-item index="audio">
             <el-tooltip :content="isCollapsed ? '音频' : ''" placement="right" :disabled="!isCollapsed">
               <el-icon><Microphone /></el-icon>
-              <template #title>音频</template>
             </el-tooltip>
+            <template #title>音频</template>
           </el-menu-item>
         </div>
 
@@ -85,20 +85,20 @@
           <el-menu-item index="materials">
             <el-tooltip :content="isCollapsed ? '素材库' : ''" placement="right" :disabled="!isCollapsed">
               <el-icon><Picture /></el-icon>
-              <template #title>素材库</template>
             </el-tooltip>
+            <template #title>素材库</template>
           </el-menu-item>
           <el-menu-item index="templates">
             <el-tooltip :content="isCollapsed ? '模板库' : ''" placement="right" :disabled="!isCollapsed">
               <el-icon><Collection /></el-icon>
-              <template #title>模板库</template>
             </el-tooltip>
+            <template #title>模板库</template>
           </el-menu-item>
           <el-menu-item index="works">
             <el-tooltip :content="isCollapsed ? '我的作品' : ''" placement="right" :disabled="!isCollapsed">
               <el-icon><Files /></el-icon>
-              <template #title>我的作品</template>
             </el-tooltip>
+            <template #title>我的作品</template>
           </el-menu-item>
         </div>
 
@@ -108,26 +108,26 @@
           <el-menu-item index="vip">
             <el-tooltip :content="isCollapsed ? '会员中心' : ''" placement="right" :disabled="!isCollapsed">
               <el-icon><UserFilled /></el-icon>
-              <template #title>会员中心</template>
             </el-tooltip>
+            <template #title>会员中心</template>
           </el-menu-item>
           <el-menu-item index="points">
             <el-tooltip :content="isCollapsed ? '积分充值' : ''" placement="right" :disabled="!isCollapsed">
               <el-icon><Coin /></el-icon>
-              <template #title>积分充值</template>
             </el-tooltip>
+            <template #title>积分充值</template>
           </el-menu-item>
           <el-menu-item index="history">
             <el-tooltip :content="isCollapsed ? '使用记录' : ''" placement="right" :disabled="!isCollapsed">
               <el-icon><Clock /></el-icon>
-              <template #title>使用记录</template>
             </el-tooltip>
+            <template #title>使用记录</template>
           </el-menu-item>
           <el-menu-item index="settings">
             <el-tooltip :content="isCollapsed ? '设置' : ''" placement="right" :disabled="!isCollapsed">
               <el-icon><Setting /></el-icon>
-              <template #title>设置</template>
             </el-tooltip>
+            <template #title>设置</template>
           </el-menu-item>
         </div>
       </el-menu>
