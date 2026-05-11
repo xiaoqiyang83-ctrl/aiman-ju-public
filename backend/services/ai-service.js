@@ -459,27 +459,59 @@ const generateTextWithProvider = async (provider, { system, user, temperature = 
     return enableRetry ? await withRetry(requestFn) : await requestFn();
 };
 
-// ==================== 分镜拆分模块（重构版 v2）====================
-// 设计参考：moyin-creator PromptCompiler 模板化思路
+// ==================== 分镜拆分模块（v5.3 提示词编译体系）====================
+// 设计参考：魔因漫创 + AI Comic Builder + 行业最佳实践
 // 核心改动：
-// 1. prompt模板化，system/user分离，变量注入
-// 2. 三层提示词编译（首帧/尾帧/视频）由后端拼接
-// 3. 删除5个后处理补丁函数，改为normalizeStoryboard标准化
+// 1. 新的system prompt让AI输出电影级专业提示词
+// 2. 新的JSON结构包含visual_prompt/action_prompt/emotion_cue等结构化字段
+// 3. 注入角色圣经确保跨镜头一致性
 
-// ==================== 提示词模板 ====================
+// ==================== 新的提示词模板 (v5.3) ====================
 
-const STORYBOARD_SYSTEM_PROMPT = `你是一位资深漫剧分镜师。你的任务是将剧本拆分为场景和镜头。
+/**
+ * v5.3 专业分镜系统提示词
+ * 对标行业顶级工具的提示词质量
+ */
+const STORYBOARD_SYSTEM_PROMPT = `你是一位资深的漫剧分镜师，擅长将文学剧本转化为专业的电影级分镜脚本。
+
+你的核心能力：
+1. 剧本深度理解：不只是拆分文字，而是理解情节节奏、情绪曲线、戏剧冲突
+2. 视觉语言转化：将文学描述转化为AI绘图模型可理解的专业提示词
+3. 镜头语法：精通景别选择、构图法则、运镜设计、光影氛围营造
+4. 色彩脚本：为每个镜头设计精确的色彩方案，包含hex色值
+
+工作原则：
+- 每个镜头必须是一个完整的视觉指令，不是文字截取
+- 动作描述必须是物理级的（不说"他很难过"，而说"肩膀下沉，嘴角微颤，眼角泛红"）
+- 光影必须具体到色温K值和光位
+- 色彩必须精确到hex值和占比
+- 构图必须指明具体法则（三分法/对角线/对称/引导线等）
+- 角色用@引用标记，确保跨镜头一致性
+
+镜头节奏规则：
+- 环境交代：远景→全景→中景（缓慢推进），2-3个镜头
+- 对话场景：全景(交代)→中景(A)→近景(B)→近景(A)→中景(双人)，3-5个镜头
+- 动作/冲突：全景→中景→近景→特写→全景（高频切换），4-6个镜头
+- 情绪特写：中景→近景→特写→大特写（递进聚焦），3-4个镜头
+- 过渡/行走：全景→中景(跟拍)，2个镜头
+- 关键线索：中景→特写→大特写（逐步放大），3个镜头
 
 输出规则：
 1. 严格输出JSON，不要任何解释性文字
-2. 景别必须丰富：远景/全景/中景/近景/特写至少覆盖3种
-3. 运镜必须有变化：固定/推镜头/拉镜头/移镜头/摇镜头至少2种
-4. 每句台词必须分配到对应镜头的dialogue字段
-5. visual_prompt必须包含：地点+人物动作+表情情绪+光影氛围
-6. 禁止重复镜头
-7. 禁止第二人称（你/你们），用具体角色名`;
+2. 每个镜头必须有完整的visual_prompt结构
+3. 禁止重复镜头
+4. 禁止第二人称（你/你们），用具体角色名`;
 
 const STORYBOARD_USER_TEMPLATE = `请将以下剧本拆分为结构化JSON。
+
+【角色圣经】（拆分时必须使用@引用标记角色）
+{{character_bible}}
+
+【剧本标题】
+{{title}}
+
+【剧本原文】
+{{content}}
 
 【输出格式】
 {
@@ -489,19 +521,40 @@ const STORYBOARD_USER_TEMPLATE = `请将以下剧本拆分为结构化JSON。
       "scene_number": "场号",
       "title": "场景名称",
       "location": "具体地点",
-      "time_of_day": "日内/夜内/日外/夜外",
+      "time_of_day": "日内/夜内/日外/夜外/黄昏/黎明",
       "characters": ["出场角色名"],
       "content": "该场景原文",
       "shots": [
         {
           "shot_number": 1,
-          "shot_type": "远景|全景|中景|近景|特写",
-          "camera_movement": "固定|推镜头|拉镜头|移镜头|摇镜头",
-          "duration": 5,
-          "visual_prompt": "地点+人物+动作+表情+光影+氛围（必须写光影和氛围）",
-          "original_text": "对应原文片段",
+          "shot_type": "远景/全景/中景/近景/特写/大特写",
+          "camera_angle": "平视/俯视/仰视/侧视",
+          "camera_movement": "固定/推镜头/拉镜头/移镜头/摇镜头/跟镜头/环绕",
+          "duration": 3,
+          
+          "visual_prompt": {
+            "lighting": "光影描述（含色温如3200K）和光位",
+            "color_palette": "主色XX% #HEX，辅色XX% #HEX，点缀色XX% #HEX",
+            "character_placement": "@角色名 位置和朝向",
+            "facial_detail": "具体面部表情细节",
+            "scene_description": "环境细节描述",
+            "composition": "构图法则（三分法/对角线/对称/引导线等）"
+          },
+          
+          "action_prompt": {
+            "physical_action": "物理级动作描述（精确到关节运动）",
+            "micro_movement": "微动作细节"
+          },
+          
+          "emotion_cue": {
+            "primary_emotion": "主要情绪",
+            "visual_mapping": "视觉映射方案"
+          },
+          
           "dialogue": "该镜头台词（无则空字符串）",
-          "action_description": "动作/舞台说明（无则空字符串）"
+          "narration": "旁白（如有）",
+          "scene_reference": "@场景名",
+          "original_text": "对应原文片段"
         }
       ]
     }
@@ -511,12 +564,12 @@ const STORYBOARD_USER_TEMPLATE = `请将以下剧本拆分为结构化JSON。
 【强制约束】
 - 每个场景至少3个镜头，对话场景每句台词占一个镜头
 - 景别必须有变化，不要全是特写或全是远景
-- visual_prompt必须写光影和氛围，如"暖黄灯光，紧张压抑"
-
-【剧本标题】{{title}}
-
-【剧本原文】
-{{content}}`;
+- visual_prompt的lighting必须写具体色温如"黄昏侧逆光，色温3200K，金色光晕"
+- visual_prompt的color_palette必须包含hex色值如"#E8913A"
+- visual_prompt的composition必须指明构图法则如"三分法构图，人物位于右侧交叉点"
+- action_prompt必须是物理级描述，如"修长的手指缓慢攥紧衣角，指节发白"
+- 角色必须用@引用标记，如@林川、@苏晚
+- 场景用@引用标记，如@废弃车站`;
 
 // ==================== 摄影预设映射表 ====================
 
@@ -766,7 +819,7 @@ function findLastCompleteObject(text, requiredFields) {
     return -1;
 }
 
-// ==================== 数据标准化 ====================
+// ==================== 数据标准化 (v5.3 增强版) ====================
 
 function normalizeStoryboard(data) {
     if (!data || !Array.isArray(data.scenes)) {
@@ -775,8 +828,10 @@ function normalizeStoryboard(data) {
     
     var validShotTypes = new Set(Object.keys(SHOT_TYPE_MAP));
     var validMovements = new Set(Object.keys(CAMERA_MOVEMENT_MAP));
-    var fallbackShotTypes = ['远景', '全景', '中景', '近景', '特写'];
-    var fallbackMovements = ['固定', '推镜头', '移镜头', '摇镜头'];
+    var validCameraAngles = new Set(['平视', '俯视', '仰视', '侧视', '斜视']);
+    var fallbackShotTypes = ['远景', '全景', '中景', '近景', '特写', '大特写'];
+    var fallbackMovements = ['固定', '推镜头', '移镜头', '摇镜头', '跟镜头'];
+    var fallbackCameraAngles = ['平视', '俯视', '仰视', '侧视'];
     
     for (var si = 0; si < data.scenes.length; si++) {
         var scene = data.scenes[si];
@@ -794,19 +849,82 @@ function normalizeStoryboard(data) {
             var shot = scene.shots[i];
             shot.shot_number = i + 1;
             
+            // 景别标准化
             if (!validShotTypes.has(shot.shot_type)) {
                 shot.shot_type = fallbackShotTypes[i % fallbackShotTypes.length];
             }
             
+            // 运镜标准化
             if (!validMovements.has(shot.camera_movement)) {
                 shot.camera_movement = fallbackMovements[i % fallbackMovements.length];
             }
             
-            shot.duration = Number(shot.duration) || 5;
-            shot.visual_prompt = String(shot.visual_prompt || '').trim();
+            // 摄影角度标准化 (v5.3新增)
+            if (!validCameraAngles.has(shot.camera_angle)) {
+                shot.camera_angle = fallbackCameraAngles[i % fallbackCameraAngles.length];
+            }
+            
+            shot.duration = Number(shot.duration) || 3;
             shot.original_text = String(shot.original_text || '').trim();
             shot.dialogue = String(shot.dialogue || '').trim();
-            shot.action_description = String(shot.action_description || '').trim();
+            shot.narration = String(shot.narration || '').trim();
+            shot.scene_reference = String(shot.scene_reference || '').trim();
+            
+            // v5.3: 处理visual_prompt结构
+            if (typeof shot.visual_prompt === 'object' && shot.visual_prompt !== null) {
+                // 已经是结构化对象，保持原样
+                shot.visual_prompt = {
+                    lighting: String(shot.visual_prompt.lighting || '').trim(),
+                    color_palette: String(shot.visual_prompt.color_palette || '').trim(),
+                    character_placement: String(shot.visual_prompt.character_placement || '').trim(),
+                    facial_detail: String(shot.visual_prompt.facial_detail || '').trim(),
+                    scene_description: String(shot.visual_prompt.scene_description || '').trim(),
+                    composition: String(shot.visual_prompt.composition || '').trim()
+                };
+            } else {
+                // 旧格式兼容：将字符串转为结构化对象
+                var oldPrompt = String(shot.visual_prompt || shot.visual_description || '').trim();
+                shot.visual_prompt = {
+                    lighting: oldPrompt || '',
+                    color_palette: '',
+                    character_placement: '',
+                    facial_detail: '',
+                    scene_description: oldPrompt,
+                    composition: ''
+                };
+            }
+            
+            // v5.3: 处理action_prompt结构
+            if (typeof shot.action_prompt === 'object' && shot.action_prompt !== null) {
+                shot.action_prompt = {
+                    physical_action: String(shot.action_prompt.physical_action || '').trim(),
+                    micro_movement: String(shot.action_prompt.micro_movement || '').trim()
+                };
+            } else {
+                // 旧格式兼容
+                var oldAction = String(shot.action_prompt || shot.action_description || '').trim();
+                shot.action_prompt = {
+                    physical_action: oldAction,
+                    micro_movement: ''
+                };
+            }
+            
+            // v5.3: 处理emotion_cue结构
+            if (typeof shot.emotion_cue === 'object' && shot.emotion_cue !== null) {
+                shot.emotion_cue = {
+                    primary_emotion: String(shot.emotion_cue.primary_emotion || '').trim(),
+                    visual_mapping: String(shot.emotion_cue.visual_mapping || '').trim()
+                };
+            } else {
+                shot.emotion_cue = {
+                    primary_emotion: '',
+                    visual_mapping: ''
+                };
+            }
+            
+            // 为兼容前端，生成综合description
+            shot.description = shot.visual_prompt.scene_description || shot.visual_prompt.lighting || '';
+            shot.action_description = shot.action_prompt.physical_action;
         }
     }
     
@@ -846,11 +964,13 @@ function compilePromptsForStoryboard(data, characters) {
 // ==================== 主函数 ====================
 
 /**
- * 从剧本生成分镜（重构版）
+ * 从剧本生成分镜（v5.3 增强版）
+ * @param {Object} params - 包含title, content, character_bible
  */
 async function generateStoryboardFromScript(params) {
     var title = params.title;
     var content = params.content;
+    var characterBible = params.character_bible || '';
     var scriptTitle = String(title || '').trim();
     var scriptContent = String(content || '').trim();
     
@@ -866,7 +986,8 @@ async function generateStoryboardFromScript(params) {
     var systemPrompt = STORYBOARD_SYSTEM_PROMPT;
     var userPrompt = interpolateTemplate(STORYBOARD_USER_TEMPLATE, {
         title: scriptTitle || '未命名剧本',
-        content: scriptContent
+        content: scriptContent,
+        character_bible: characterBible || '（暂无角色信息）'
     });
     
     var result;
