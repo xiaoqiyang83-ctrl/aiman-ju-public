@@ -16,7 +16,7 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // 确保uploads目录存在
-const uploadDirs = ['scripts', 'audio', 'scenes', 'shots', 'characters', 'exports', 'videos'];
+const uploadDirs = ['scripts', 'audio', 'scenes', 'shots', 'characters', 'exports', 'videos', 'images'];
 uploadDirs.forEach(dir => {
   const fullPath = path.join(__dirname, 'uploads', dir);
   if (!fs.existsSync(fullPath)) {
@@ -33,6 +33,7 @@ pool.connect((err, client, release) => {
     release();
   }
 });
+
 /*
 // ==================== 路由加载 ====================
 const routeFiles = fs.readdirSync(path.join(__dirname, 'routes')).filter(file => file.endsWith('.js'));
@@ -96,6 +97,8 @@ app.use('/api/templates', require('./routes/templates'));
 app.use('/api/teams', require('./routes/teams'));
 app.use('/api/versions', require('./routes/versions'));
 app.use('/api/videos', require('./routes/videos'));
+// ==================== 图像生成API ====================
+app.use('/api/images', require('./routes/images'));
 // 404处理
 app.use('/api/*', (req, res) => {
   res.status(404).json({ success: false, message: '接口不存在' });
@@ -113,5 +116,5 @@ app.use((err, req, res, next) => {
 //app.use('/api/scenes', require('./routes/scenes'));
 
 app.listen(PORT, () => {
-  console.log(`服务器运行在 http://localhost:${PORT}`);
+  console.log('服务器运行在 http://localhost:' + PORT);
 });

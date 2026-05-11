@@ -432,6 +432,15 @@
                             <el-icon><VideoPlay /></el-icon>
                             生成
                           </el-button>
+                          <el-button 
+                            size="small" 
+                            type="success"
+                            :loading="generatingShotImage[shot.id]"
+                            @click.stop="handleGenShotImage(shot)"
+                          >
+                            <el-icon><Picture /></el-icon>
+                            生图
+                          </el-button>
                           <el-upload
                             class="shot-upload-btn"
                             action="#"
@@ -1567,6 +1576,7 @@ import {
   taskJobsAPI,
   userAPI,
   projectsAPI,
+  imagesAPI,
   getAssetUrl
 } from '../api/index'
 import {
@@ -1575,6 +1585,7 @@ import {
   Bell,
   Star,
   PictureFilled,
+  Picture,
   Coin,
   Document,
   Grid,
@@ -1600,7 +1611,8 @@ import {
   Headset,
   ArrowLeft,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  Picture
 } from '@element-plus/icons-vue'
 
 const props = defineProps({
@@ -1835,7 +1847,7 @@ const characters = ref([])
 const showCharacterDialog = ref(false)
 const creatingCharacter = ref(false)
 const generatingImage = reactive({})
-const generatingRetry = reactive({})
+const generatingShotImage = reactive({})
 const calibratingCharacter = reactive({})
 const isEditingCharacter = ref(false)
 const currentEditingCharacter = ref(null)
@@ -2572,78 +2584,72 @@ const handleUploadReference = async (file, char) => {
 }
 
 // ===== 问题2修复：角色图片生成错误处理和重试逻辑 =====
+// v5.0 CogView生图 - 生成角色图片
 const handleGenCharImage = async (char) => {
-  generatingImage[char.id] = true
-  generatingRetry[char.id] = 0
-  const maxRetries = 3
-  
-  const tryGenerate = async (retryCount) => {
-    try {
-      console.log(`开始生成角色图片，角色ID: ${char.id}, 重试次数: ${retryCount}`)
-      await charactersAPI.aiGenerate(char.id, {
-        prompt: char.description || char.name,
-        name: char.name,
-        gender: char.gender,
-        occupation: char.occupation
-      })
-      
-      ElMessage.success('AI生图已启动，请稍候...')
-      // 轮询状态
-      pollCharacterImageStatus(char.id)
-    } catch (err) {
-      console.error(`生成角色图片失败 (尝试 ${retryCount + 1}/${maxRetries}):`, err)
-      
-      if (retryCount < maxRetries - 1) {
-        generatingRetry[char.id] = retryCount + 1
-        ElMessage.warning(`生成失败，正在重试 (${retryCount + 1}/${maxRetries})...`)
-        // 延迟2秒后重试
-        setTimeout(() => tryGenerate(retryCount + 1), 2000)
-      } else {
-        generatingImage[char.id] = false
-        ElMessage.error('图片生成失败，已达到最大重试次数，请稍后再试')
-      }
-    }
+  // 检查角色是否已校准（需要有visual_prompt_en）
+  if (!char.visual_prompt_en && !char.identity_anchors) {
+    ElMessage.warning('请先进行角色校准后再生成图片')
+    return
   }
   
-  await tryGenerate(0)
+  generatingImage[char.id] = true
+  ElMessage.info('正在使用CogView生成角色图片...')
+  
+  try {
+    const response = await charactersAPI.generateImage(char.id, {})
+    if (response.success && response.imageUrl) {
+      ElMessage.success('角色图片生成成功！')
+      // 更新角色数据
+      char.image_url = response.imageUrl
+      await loadCharacters()
+    } else {
+      ElMessage.error(response.message || '生成失败')
+    }
+  } catch (err) {
+    console.error('CogView生图失败:', err)
+    ElMessage.error(err.response?.data?.message || err.message || '图片生成失败')
+  } finally {
+    generatingImage[char.id] = false
+  }
 }
 
-const pollCharacterImageStatus = async (charId) => {
-  const maxAttempts = 60
-  let attempts = 0
-  
-  const poll = async () => {
-    if (attempts >= maxAttempts) {
-      generatingImage[charId] = false
-      ElMessage.warning('图片生成超时，请手动刷新查看')
-      return
-    }
-    
-    try {
-      const response = await charactersAPI.get(charId)
-      const char = response.data || response
-      if (char.image_status === 'completed' && char.image_url) {
-        generatingImage[charId] = false
-        await loadCharacters()
-        ElMessage.success('图片生成完成')
-        return
-      }
-      if (char.image_status === 'failed') {
-        generatingImage[charId] = false
-        ElMessage.error('图片生成失败，请重试')
-        return
-      }
-      attempts++
-      setTimeout(poll, 2000)
-    } catch (err) {
-      console.error('轮询图片状态失败:', err)
-      attempts++
-      setTimeout(poll, 2000)
-    }
+// v5.0 CogView生图 - 生成分镜图片
+const handleGenShotImage = async (shot) => {
+  // 检查镜头是否有image_prompt
+  if (!shot.image_prompt && !shot.visual_prompt) {
+    ElMessage.warning('镜头没有图片提示词(image_prompt)，请先设置')
+    return
   }
   
-  setTimeout(poll, 2000)
+  generatingShotImage[shot.id] = true
+  ElMessage.info('正在使用CogView生成分镜图片...')
+  
+  try {
+    const response = await imagesAPI.generateShot(shot.id)
+    if (response.success && response.imageUrl) {
+      ElMessage.success('分镜图片生成成功！')
+      // 更新镜头数据
+      shot.scene_image_url = response.imageUrl
+      // 触发UI更新
+      const scene = scenes.value.find(s => s.id === shot.scene_id)
+      if (scene && scene.shots) {
+        const shotIndex = scene.shots.findIndex(s => s.id === shot.id)
+        if (shotIndex !== -1) {
+          scene.shots[shotIndex].scene_image_url = response.imageUrl
+        }
+      }
+    } else {
+      ElMessage.error(response.message || '生成失败')
+    }
+  } catch (err) {
+    console.error('CogView分镜生图失败:', err)
+    ElMessage.error(err.response?.data?.message || err.message || '分镜图片生成失败')
+  } finally {
+    generatingShotImage[shot.id] = false
+  }
 }
+
+
 
 const handleDeleteCharacter = async (char) => {
   try {

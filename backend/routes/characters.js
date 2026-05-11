@@ -4,6 +4,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const characterController = require('../controllers/characterController');
+const imageController = require('../controllers/imageController');
 
 // 配置 multer 用于角色图片上传
 const storage = multer.diskStorage({
@@ -52,5 +53,10 @@ router.get('/:character_id/variations/:id', characterController.getVariation);
 router.post('/:character_id/variations', characterController.createVariation);
 router.put('/:character_id/variations/:id', characterController.updateVariation);
 router.delete('/:character_id/variations/:id', characterController.deleteVariation);
+
+// ==================== v5.0 角色生图接口 (CogView) ====================
+
+// 生成角色图片 - 使用视觉提示词生成角色形象图
+router.post('/:id/generate-image', imageController.generateCharacter);
 
 module.exports = router;

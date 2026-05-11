@@ -1,0 +1,159 @@
+/**
+ * imageController.js - 图像生成控制器
+ * 统一处理生图相关请求
+ */
+
+const imageService = require('../services/image-service');
+
+/**
+ * POST /api/images/generate
+ * 通用生图接口
+ */
+async function generate(req, res) {
+  try {
+    const { prompt, model, size, quality } = req.body;
+    
+    if (!prompt) {
+      return res.status(400).json({ 
+        success: false, 
+        message: '缺少必填参数: prompt' 
+      });
+    }
+
+    const result = await imageService.generateFromPrompt({ 
+      prompt, 
+      model, 
+      size, 
+      quality 
+    });
+
+    res.json({
+      success: true,
+      imageUrl: result.imageUrl,
+      sourceUrl: result.sourceUrl,
+      message: '图片生成成功'
+    });
+  } catch (error) {
+    console.error('[ImageController] 生图失败:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: error.message || '图片生成失败' 
+    });
+  }
+}
+
+/**
+ * POST /api/images/generate-shot/:shotId
+ * 生成分镜图片
+ */
+async function generateShot(req, res) {
+  try {
+    const { shotId } = req.params;
+    
+    if (!shotId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: '缺少shotId' 
+      });
+    }
+
+    const result = await imageService.generateShotImage(parseInt(shotId));
+
+    res.json({
+      success: true,
+      imageUrl: result.imageUrl,
+      message: '分镜图片生成成功'
+    });
+  } catch (error) {
+    console.error('[ImageController] 分镜生图失败:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: error.message || '分镜图片生成失败' 
+    });
+  }
+}
+
+/**
+ * POST /api/images/generate-character/:characterId
+ * 生成角色图片
+ */
+async function generateCharacter(req, res) {
+  try {
+    const { characterId } = req.params;
+    const { variation_id } = req.body;
+    
+    if (!characterId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: '缺少characterId' 
+      });
+    }
+
+    const result = await imageService.generateCharacterImage(
+      parseInt(characterId), 
+      variation_id ? parseInt(variation_id) : null
+    );
+
+    res.json({
+      success: true,
+      imageUrl: result.imageUrl,
+      message: '角色图片生成成功'
+    });
+  } catch (error) {
+    console.error('[ImageController] 角色生图失败:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: error.message || '角色图片生成失败' 
+    });
+  }
+}
+
+/**
+ * GET /api/images/test
+ * 测试API连接
+ */
+async function test(req, res) {
+  try {
+    const result = await imageService.testConnection();
+    
+    if (result.success) {
+      res.json({
+        success: true,
+        message: 'CogView API连接正常',
+        testUrl: result.url
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        message: 'CogView API连接失败',
+        error: result.error
+      });
+    }
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: '测试失败',
+      error: error.message
+    });
+  }
+}
+
+/**
+ * GET /api/images/models
+ * 获取支持的模型列表
+ */
+async function getModels(req, res) {
+  res.json({
+    success: true,
+    models: imageService.COGVIEW_MODELS,
+    default: imageService.DEFAULT_MODEL
+  });
+}
+
+module.exports = {
+  generate,
+  generateShot,
+  generateCharacter,
+  test,
+  getModels
+};

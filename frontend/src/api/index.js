@@ -71,12 +71,12 @@ export const authAPI = {
 // ==================== 项目相关 ====================
 export const projectsAPI = {
   list: () => api.get('/projects'),
-  get: (id) => api.get(`/projects/${id}`),
+  get: (id) => api.get('/projects/' + id),
   create: (data) => api.post('/projects', data),
-  update: (id, data) => api.put(`/projects/${id}`, data),
-  delete: (id) => api.delete(`/projects/${id}`),
-  setTeam: (id, teamId) => api.put(`/projects/${id}/team`, { team_id: teamId }),
-  autoGenerate: (id) => api.post(`/projects/${id}/auto-generate`),
+  update: (id, data) => api.put('/projects/' + id, data),
+  delete: (id) => api.delete('/projects/' + id),
+  setTeam: (id, teamId) => api.put('/projects/' + id + '/team', { team_id: teamId }),
+  autoGenerate: (id) => api.post('/projects/' + id + '/auto-generate'),
   createFromTemplate: (data) => api.post('/projects/from-template', data)
 }
 
@@ -84,69 +84,71 @@ export const projectsAPI = {
 export const teamsAPI = {
   list: () => api.get('/teams'),
   create: (data) => api.post('/teams', data),
-  addMember: (teamId, data) => api.post(`/teams/${teamId}/members`, data),
-  updateMember: (teamId, userId, data) => api.put(`/teams/${teamId}/members/${userId}`, data)
+  addMember: (teamId, data) => api.post('/teams/' + teamId + '/members', data),
+  updateMember: (teamId, userId, data) => api.put('/teams/' + teamId + '/members/' + userId, data)
 }
 
 // ==================== 模板相关 ====================
 export const templatesAPI = {
-  list: (category) => api.get(`/templates${category ? '?category=' + category : ''}`),
-  get: (id) => api.get(`/templates/${id}`)
+  list: (category) => api.get('/templates' + (category ? '?category=' + category : '')),
+  get: (id) => api.get('/templates/' + id)
 }
 
 // ==================== 剧本相关 ====================
 export const scriptsAPI = {
-  list: (projectId) => api.get(`/scripts?project_id=${projectId}`),
-  get: (id) => api.get(`/scripts/${id}`),
+  list: (projectId) => api.get('/scripts?project_id=' + projectId),
+  get: (id) => api.get('/scripts/' + id),
   upload: (formData) => api.post('/scripts/upload', formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
   }),
-  update: (id, data) => api.put(`/scripts/${id}`, data),
-  delete: (id) => api.delete(`/scripts/${id}`)
+  update: (id, data) => api.put('/scripts/' + id, data),
+  delete: (id) => api.delete('/scripts/' + id)
 }
 
 // ==================== 角色相关 ====================
 export const charactersAPI = {
-  list: (scriptId) => api.get(`/characters?script_id=${scriptId}`),
-  get: (id) => api.get(`/characters/${id}`),
+  list: (scriptId) => api.get('/characters?script_id=' + scriptId),
+  get: (id) => api.get('/characters/' + id),
   create: (data) => api.post('/characters', data),
-  update: (id, data) => api.put(`/characters/${id}`, data),
-  delete: (id) => api.delete(`/characters/${id}`),
-  aiGenerate: (id, data) => api.post(`/characters/${id}/ai-generate`, data),
+  update: (id, data) => api.put('/characters/' + id, data),
+  delete: (id) => api.delete('/characters/' + id),
+  aiGenerate: (id, data) => api.post('/characters/' + id + '/ai-generate', data),
   // v5.0 角色一致性系统
-  calibrate: (id) => api.post(`/characters/${id}/calibrate`),
-  compilePrompt: (id, data) => api.post(`/characters/${id}/compile-prompt`, data),
+  calibrate: (id) => api.post('/characters/' + id + '/calibrate'),
+  compilePrompt: (id, data) => api.post('/characters/' + id + '/compile-prompt', data),
   // 变体CRUD
-  listVariations: (characterId) => api.get(`/characters/${characterId}/variations`),
-  createVariation: (characterId, data) => api.post(`/characters/${characterId}/variations`, data),
-  updateVariation: (id, data) => api.put(`/characters/${characterId}/variations/${id}`, data),
-  deleteVariation: (id) => api.delete(`/characters/${characterId}/variations/${id}`)
+  listVariations: (characterId) => api.get('/characters/' + characterId + '/variations'),
+  createVariation: (characterId, data) => api.post('/characters/' + characterId + '/variations', data),
+  updateVariation: (id, data) => api.put('/characters/' + characterId + '/variations/' + id, data),
+  deleteVariation: (id) => api.delete('/characters/' + characterId + '/variations/' + id),
+  // v5.0 CogView生图
+  generateImage: (id, data) => api.post('/characters/' + id + '/generate-image', data)
 }
 
 // ==================== 场景相关 ====================
 export const scenesAPI = {
-  list: (scriptId) => api.get(`/scenes?script_id=${scriptId}`),
-  generate: (scriptId) => api.post(`/scenes/generate?script_id=${scriptId}`),
-  update: (id, data) => api.put(`/scenes/${id}`, data),
-  delete: (id) => api.delete(`/scenes/${id}`)
+  list: (scriptId) => api.get('/scenes?script_id=' + scriptId),
+  generate: (scriptId) => api.post('/scenes/generate?script_id=' + scriptId),
+  update: (id, data) => api.put('/scenes/' + id, data),
+  delete: (id) => api.delete('/scenes/' + id)
 }
 
 // ==================== 镜头相关 ====================
 export const shotsAPI = {
-  list: (sceneId) => api.get(`/shots?scene_id=${sceneId}`),
-  get: (id) => api.get(`/shots/${id}`),
+  list: (sceneId) => api.get('/shots?scene_id=' + sceneId),
+  get: (id) => api.get('/shots/' + id),
   create: (data) => api.post('/shots', data),
-  update: (id, data) => api.put(`/shots/${id}`, data),
-  delete: (id) => api.delete(`/shots/${id}`),
-  lipSync: (id) => api.post(`/shots/${id}/lip-sync`)
+  update: (id, data) => api.put('/shots/' + id, data),
+  delete: (id) => api.delete('/shots/' + id),
+  lipSync: (id) => api.post('/shots/' + id + '/lip-sync')
 }
 
 // ==================== 视频相关 ====================
 export const videosAPI = {
-  text2video: (shotId, data) => api.post(`/videos/text2video/${shotId}`, data),
-  image2video: (shotId, data) => api.post(`/videos/image2video/${shotId}`, data),
-  reference2video: (shotId, data) => api.post(`/videos/reference2video/${shotId}`, data),
-  regenerate: (shotId, data) => api.post(`/videos/regenerate/${shotId}`, data),
+  text2video: (shotId, data) => api.post('/videos/text2video/' + shotId, data),
+  image2video: (shotId, data) => api.post('/videos/image2video/' + shotId, data),
+  reference2video: (shotId, data) => api.post('/videos/reference2video/' + shotId, data),
+  regenerate: (shotId, data) => api.post('/videos/regenerate/' + shotId, data),
   merge: (data) => api.post('/videos/merge', data)
 }
 
@@ -159,29 +161,43 @@ export const audioAPI = {
   applySfx: (data) => api.post('/audio/apply-sfx', data),
   generateVoice: (data) => api.post('/audio/generate-voice', data),
   // 音频资产库
-  getLibrary: (projectId) => api.get(`/audio/library${projectId ? '?project_id=' + projectId : ''}`),
+  getLibrary: (projectId) => api.get('/audio/library' + (projectId ? '?project_id=' + projectId : '')),
   upload: (formData) => api.post('/audio/upload', formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
   }),
-  delete: (id) => api.delete(`/audio/${id}`)
+  delete: (id) => api.delete('/audio/' + id)
+}
+
+// ==================== 图像生成相关 ====================
+export const imagesAPI = {
+  // 通用生图（直接传prompt）
+  generate: (data) => api.post('/images/generate', data),
+  // 生成分镜图片
+  generateShot: (shotId) => api.post('/images/generate-shot/' + shotId),
+  // 生成角色图片（通过统一images路由）
+  generateCharacter: (characterId, data) => api.post('/images/generate-character/' + characterId, data),
+  // 测试API连接
+  test: () => api.get('/images/test'),
+  // 获取支持的模型
+  getModels: () => api.get('/images/models')
 }
 
 // ==================== 导出相关 ====================
 export const exportsAPI = {
-  listByProject: (projectId) => api.get(`/exports/project/${projectId}/list`),
+  listByProject: (projectId) => api.get('/exports/project/' + projectId + '/list'),
   create: (data) => api.post('/exports', data),
   createVideo: (data) => api.post('/exports/video', data),
   createPDF: (data) => api.post('/exports/pdf', data),
-  getStatus: (exportId) => api.get(`/exports/${exportId}/status`),
-  delete: (exportId) => api.delete(`/exports/${exportId}`)
+  getStatus: (exportId) => api.get('/exports/' + exportId + '/status'),
+  delete: (exportId) => api.delete('/exports/' + exportId)
 }
 
 // ==================== 版本相关 ====================
 export const versionsAPI = {
-  listByProject: (projectId) => api.get(`/project_versions/project/${projectId}`),
+  listByProject: (projectId) => api.get('/project_versions/project/' + projectId),
   create: (data) => api.post('/project_versions', data),
-  get: (id) => api.get(`/project_versions/${id}`),
-  delete: (id) => api.delete(`/project_versions/${id}`)
+  get: (id) => api.get('/project_versions/' + id),
+  delete: (id) => api.delete('/project_versions/' + id)
 }
 
 // ==================== 用户/积分相关 ====================
@@ -197,13 +213,13 @@ export const taskJobsAPI = {
   list: (projectId, status) => {
     let url = '/task_jobs'
     const params = []
-    if (projectId) params.push(`project_id=${projectId}`)
-    if (status) params.push(`status=${status}`)
-    if (params.length) url += `?${params.join('&')}`
+    if (projectId) params.push('project_id=' + projectId)
+    if (status) params.push('status=' + status)
+    if (params.length) url += '?' + params.join('&')
     return api.get(url)
   },
-  get: (jobId) => api.get(`/task_jobs/${jobId}`),
-  cancel: (jobId) => api.post(`/task_jobs/${jobId}/cancel`)
+  get: (jobId) => api.get('/task_jobs/' + jobId),
+  cancel: (jobId) => api.post('/task_jobs/' + jobId + '/cancel')
 }
 
 // 导出基础URL，方便拼接静态资源地址
@@ -216,7 +232,7 @@ export const getAssetUrl = (url) => {
   if (!url) return ''
   if (url.startsWith('http') || url.startsWith('blob:') || url.startsWith('data:')) return url
   const base = BASE_URL.replace(/\/api$/, '') // 移除结尾的 /api
-  return `${base}${url.startsWith('/') ? '' : '/'}${url}`
+  return base + (url.startsWith('/') ? '' : '/') + url
 }
 
 export default api
