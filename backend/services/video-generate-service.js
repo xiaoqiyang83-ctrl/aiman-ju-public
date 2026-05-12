@@ -22,6 +22,13 @@ const COGVIDEO_MODELS = {
     supportsAudio: true,
     maxDuration: 5 // 秒
   },
+  'cogvideox': {
+    name: 'CogVideoX Pro',
+    price: 0.5,
+    supportsImage: true,
+    supportsAudio: true,
+    maxDuration: 10
+  },
   'cogvideox-2': {
     name: 'CogVideoX-2',
     price: 0.5,

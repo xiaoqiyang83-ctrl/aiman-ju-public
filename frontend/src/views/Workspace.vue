@@ -595,6 +595,14 @@
             </template>
             <div class="tab-content video-content">
               <div class="content-toolbar">
+                <el-select v-model="videoModel" size="small" style="width: 150px; margin-right: 8px;">
+                  <el-option label="CogVideoX 免费" value="cogvideox-flash" />
+                  <el-option label="CogVideoX Pro" value="cogvideox" />
+                  <el-option label="Seedance 2.0" value="seedance-2.0" disabled />
+                  <el-option label="可灵 Kling" value="kling-3.0" disabled />
+                  <el-option label="Sora 2" value="sora-2" disabled />
+                  <el-option label="Vidu Q3" value="vidu-q3" disabled />
+                </el-select>
                 <el-button 
                   :type="selectedShotIds.length > 0 ? 'primary' : 'default'" 
                   @click="handleBatchGenerate"
@@ -2071,6 +2079,9 @@ const calibratingCharacter = reactive({})
 const cogVideoTaskIds = ref({})
 const cogVideoTaskTimers = ref({})
 
+// 视频模型选择
+const videoModel = ref('cogvideox-flash')
+
 // 生图尺寸选择（语义化key）
 const shotImageSize = ref('landscape_16_9')
 const IMAGE_SIZE_MAP = {
@@ -3133,7 +3144,8 @@ const handleGenerateCogVideo = async (shot) => {
     
     // 调用CogVideoX视频生成API
     const response = await videosAPI.generateShot(shot.id, {
-      withAudio: true
+      withAudio: true,
+      model: videoModel.value
     })
     
     if (response.success && response.taskId) {
@@ -3955,7 +3967,7 @@ const handleBatchGenerate = async () => {
         console.warn('镜头' + shot.shot_number + '没有首帧图，跳过')
         continue
       }
-      const res = await videosAPI.generateShot(shot.id, { withAudio: true })
+      const res = await videosAPI.generateShot(shot.id, { withAudio: true, model: videoModel.value })
       if (res.success && res.taskId) {
         cogVideoTaskIds.value[shot.id] = res.taskId
         pollCogVideoStatus(shot.id)
@@ -4004,7 +4016,7 @@ const handleGenerateSingle = async (row) => {
       ElMessage.warning('请先生成分镜图片')
       return
     }
-    const res = await videosAPI.generateShot(row.id, { withAudio: true })
+    const res = await videosAPI.generateShot(row.id, { withAudio: true, model: videoModel.value })
     if (res.success && res.taskId) {
       cogVideoTaskIds.value[row.id] = res.taskId
       pollCogVideoStatus(row.id)
@@ -4533,7 +4545,7 @@ const handleGenerateShotVideo = async (shot) => {
       ElMessage.warning('镜头 #' + shot.shot_number + '没有首帧图，请先生成图片')
       return
     }
-    const res = await videosAPI.generateShot(shot.id, { withAudio: true })
+    const res = await videosAPI.generateShot(shot.id, { withAudio: true, model: videoModel.value })
     if (res.success && res.taskId) {
       cogVideoTaskIds.value[shot.id] = res.taskId
       pollCogVideoStatus(shot.id)
