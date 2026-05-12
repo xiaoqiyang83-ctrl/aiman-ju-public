@@ -3061,6 +3061,7 @@ const handleGenShotImage = async (shot) => {
           scene.shots[shotIndex].scene_image_url = response.imageUrl
         }
       }
+      await loadShots(true)
     } else {
       ElMessage.error(response.message || '生成失败')
     }
