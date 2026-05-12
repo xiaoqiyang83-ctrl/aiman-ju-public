@@ -527,6 +527,9 @@ const STORYBOARD_USER_TEMPLATE = `请将以下剧本拆分为结构化JSON。
 【剧本原文】
 {{content}}
 
+【预提取台词列表】（以下台词必须完整分配到对应镜头的dialogue字段，一句不能漏，格式为@角色名：台词）
+{{dialogue_list}}
+
 【输出格式】
 {
   "scenes": [
@@ -836,6 +839,155 @@ function findLastCompleteObject(text, requiredFields) {
     return -1;
 }
 
+// ==================== 剧本预解析 - 台词提取 ====================
+
+/**
+ * 剧本预解析：从原文中提取台词列表
+ * 参考：魔因漫创 episode-parser.ts 的规则解析思路
+ * 台词格式：角色名：台词内容 或 角色名:台词内容
+ * 跳过：△开头的舞台指示、【字幕】、空行
+ */
+function preParseScript(content) {
+    var dialogues = [];
+    if (!content) return dialogues;
+    var lines = content.split('\n');
+    for (var i = 0; i < lines.length; i++) {
+        var line = lines[i].trim();
+        // 跳过空行
+        if (!line) continue;
+        // 跳过舞台指示（△开头）
+        if (line.charAt(0) === '△') continue;
+        // 跳过字幕/转场
+        if (/^【/.test(line)) continue;
+        // 跳过场景头（如 "1-1 日 内 地点" 或 "场景1" 等）
+        if (/^\d+-\d+\s/.test(line)) continue;
+        if (/^场景\d+/.test(line)) continue;
+        // 跳过 "人物：" 行
+        if (/^人物[：:]/.test(line)) continue;
+        // 跳过纯环境描写（太长的行，不像台词）
+        if (line.length > 80) continue;
+        
+        // 匹配台词格式：角色名：台词 或 角色名:台词
+        // 角色名1-8个中文字符，冒号后是台词内容
+        var match = line.match(/^([\u4e00-\u9fa5A-Za-z0-9·]{1,8})[：:]\s*(.+)$/);
+        if (match) {
+            var charName = match[1].trim();
+            var dialogueText = match[2].trim();
+            // 排除明显的非台词行
+            var nonDialoguePatterns = /^(第[一二三四五六七八九十\d]+集|大纲|人物小传|场景|时间|地点|氛围|视觉|标签|备注)/;
+            if (nonDialoguePatterns.test(charName)) continue;
+            if (dialogueText.length === 0) continue;
+            dialogues.push({
+                character: charName,
+                text: dialogueText,
+                lineIndex: i
+            });
+        }
+    }
+    return dialogues;
+}
+
+/**
+ * 自动补全台词：检查预提取的台词是否都被分配到镜头，遗漏的自动补上
+ */
+function autoFillDialogue(normalized, dialogueList) {
+    if (!dialogueList || dialogueList.length === 0) return normalized;
+    
+    // Step 1: 收集已有dialogue中出现的台词文本
+    var assignedTexts = [];
+    for (var si = 0; si < normalized.scenes.length; si++) {
+        var scene = normalized.scenes[si];
+        for (var shi = 0; shi < scene.shots.length; shi++) {
+            var shot = scene.shots[shi];
+            if (shot.dialogue && shot.dialogue.trim()) {
+                assignedTexts.push(shot.dialogue.trim());
+            }
+            // 如果dialogue为空但original_text包含台词格式，自动提取
+            if (!shot.dialogue || !shot.dialogue.trim()) {
+                var origMatch = (shot.original_text || '').match(/([^：:\n]{1,8})[：:]\s*(.+)/);
+                if (origMatch) {
+                    shot.dialogue = '@' + origMatch[1].trim() + '：' + origMatch[2].trim();
+                    assignedTexts.push(shot.dialogue);
+                }
+            }
+        }
+    }
+    
+    // Step 2: 检查遗漏的台词
+    var missingDialogues = [];
+    for (var di = 0; di < dialogueList.length; di++) {
+        var d = dialogueList[di];
+        var found = false;
+        for (var ai = 0; ai < assignedTexts.length; ai++) {
+            // 检查台词文本是否出现在已分配的dialogue中
+            if (assignedTexts[ai].indexOf(d.text) !== -1) {
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            missingDialogues.push(d);
+        }
+    }
+    
+    if (missingDialogues.length === 0) return normalized;
+    
+    console.log('[AI Service] 发现遗漏台词 ' + missingDialogues.length + ' 条，自动补全');
+    
+    // Step 3: 为遗漏的台词匹配场景并追加镜头
+    for (var mi = 0; mi < missingDialogues.length; mi++) {
+        var missing = missingDialogues[mi];
+        
+        // 找到包含该角色的场景
+        var targetScene = null;
+        for (var sIdx = 0; sIdx < normalized.scenes.length; sIdx++) {
+            var scene = normalized.scenes[sIdx];
+            if (scene.characters.indexOf(missing.character) !== -1 || 
+                (scene.content && scene.content.indexOf(missing.character) !== -1)) {
+                targetScene = scene;
+                break;
+            }
+        }
+        
+        if (targetScene) {
+            // 在该场景末尾追加一个近景镜头
+            var newShot = {
+                shot_number: targetScene.shots.length + 1,
+                shot_type: '近景',
+                camera_angle: '平视',
+                camera_movement: '固定',
+                duration: 3,
+                dialogue: '@' + missing.character + '：' + missing.text,
+                narration: '',
+                scene_reference: '@' + (targetScene.title || ''),
+                original_text: missing.character + '：' + missing.text,
+                visual_prompt: {
+                    lighting: '',
+                    color_palette: '',
+                    character_placement: '@' + missing.character + ' 画面中央',
+                    facial_detail: '',
+                    scene_description: '',
+                    composition: ''
+                },
+                action_prompt: {
+                    physical_action: '',
+                    micro_movement: ''
+                },
+                emotion_cue: {
+                    primary_emotion: '',
+                    visual_mapping: ''
+                }
+            };
+            targetScene.shots.push(newShot);
+            console.log('[AI Service] 补全台词: @' + missing.character + '：' + missing.text.substring(0, 20));
+        } else {
+            console.log('[AI Service] 无法匹配场景，遗漏台词: @' + missing.character + '：' + missing.text.substring(0, 20));
+        }
+    }
+    
+    return normalized;
+}
+
 // ==================== 数据标准化 (v5.3 增强版) ====================
 
 function normalizeStoryboard(data) {
@@ -1000,11 +1152,22 @@ async function generateStoryboardFromScript(params) {
         throw new Error('未配置可用的大模型接口。请在 backend/.env 按 backend/.env.example 添加：AI_PROVIDER=openai-compatible、AI_API_KEY、AI_BASE_URL、AI_MODEL（推荐），然后重试上传。');
     }
     
+    // 预提取台词列表
+    var dialogueList = preParseScript(scriptContent);
+    var dialogueListStr = '';
+    if (dialogueList.length > 0) {
+        dialogueListStr = dialogueList.map(function(d, i) {
+            return (i+1) + '. @' + d.character + '：' + d.text;
+        }).join('\n');
+    }
+    console.log('[AI Service] 预提取台词数量:', dialogueList.length);
+    
     var systemPrompt = STORYBOARD_SYSTEM_PROMPT;
     var userPrompt = interpolateTemplate(STORYBOARD_USER_TEMPLATE, {
         title: scriptTitle || '未命名剧本',
         content: scriptContent,
-        character_bible: characterBible || '（暂无角色信息）'
+        character_bible: characterBible || '（暂无角色信息）',
+        dialogue_list: dialogueListStr
     });
     
     var result;
@@ -1027,6 +1190,8 @@ async function generateStoryboardFromScript(params) {
     var jsonText = extractFirstJsonObject(result.content);
     var parsed = parseJsonWithFallback(jsonText);
     var normalized = normalizeStoryboard(parsed);
+    // 自动补全遗漏的台词
+    normalized = autoFillDialogue(normalized, dialogueList);
     // 调试日志：检查每个镜头的dialogue输出
     normalized.scenes.forEach(function(s, si) {
         s.shots.forEach(function(sh, shi) {
