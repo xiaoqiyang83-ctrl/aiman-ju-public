@@ -471,9 +471,9 @@
                           </el-upload>
                         </div>
                         <span class="shot-index">#{{ shot.shot_number ?? (idx + 1) }}</span>
-                        <el-tag class="shot-status-tag" :type="getShotStatusType(shot.video_status)" size="small">
-                          {{ getShotStatusText(shot.video_status) }}
-                        </el-tag>
+                        <el-tag v-if="shot.video_status === 'completed'" class="shot-status-tag" type="success" size="small">已完成</el-tag>
+                        <el-tag v-else-if="!shot.scene_image_url && !shot.video_status" class="shot-status-tag" type="info" size="small">待生成</el-tag>
+                        <el-tag v-else-if="shot.video_status && shot.video_status !== 'completed'" class="shot-status-tag" :type="getShotStatusType(shot.video_status)" size="small">{{ getShotStatusText(shot.video_status) }}</el-tag>
                       </div>
                       
                       <!-- 镜头信息 -->
@@ -667,7 +667,13 @@
                       <span v-else class="desc-text">—</span>
                     </template>
                   </el-table-column>
-                  <el-table-column label="状态" width="100" align="center">
+                  <el-table-column label="图片" width="72" align="center">
+                    <template #default="{ row }">
+                      <el-tag v-if="row.scene_image_url" type="success" size="small">有</el-tag>
+                      <el-tag v-else type="info" size="small">无</el-tag>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="视频" width="100" align="center">
                     <template #default="{ row }">
                       <el-tag :type="getVideoStatusType(row.video_status)" size="small">{{ getVideoStatusText(row.video_status) }}</el-tag>
                     </template>
@@ -6706,3 +6712,5 @@ const handleMoveShot = async (scene, shot, direction) => {
   gap: 8px;
   margin-bottom: 16px;
 }
+
+const shotImageSize = ref('1344x768') // 生图尺寸，默认16:9横版

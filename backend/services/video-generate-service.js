@@ -301,7 +301,7 @@ async function generateShotVideo(shotId, options = {}) {
 
   // 更新镜头状态
   await pool.query(
-    'UPDATE shots SET video_status = $1, job_id = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3',
+    'UPDATE shots SET video_status = $1, job_id = $2 WHERE id = $3',
     ['pending', taskId, shotId]
   );
 
@@ -344,7 +344,7 @@ async function downloadAndUpdateShot(taskId, shotId, videoUrl, coverImageUrl) {
 
   // 更新数据库
   await pool.query(
-    'UPDATE shots SET video_url = $1, video_status = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3',
+    'UPDATE shots SET video_url = $1, video_status = $2 WHERE id = $3',
     [videoRelativePath, 'completed', shotId]
   );
 

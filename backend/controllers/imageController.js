@@ -49,7 +49,7 @@ async function generate(req, res) {
 async function generateShot(req, res) {
   try {
     const { shotId } = req.params;
-    const { visualContinuityPrompt } = req.body || {};
+    const { visualContinuityPrompt, size } = req.body || {};
     
     if (!shotId) {
       return res.status(400).json({ 
@@ -60,7 +60,8 @@ async function generateShot(req, res) {
 
     const result = await imageService.generateShotImage(
       parseInt(shotId), 
-      visualContinuityPrompt
+      visualContinuityPrompt,
+      size
     );
 
     res.json({

@@ -308,7 +308,7 @@ async function generateCharacterImage(characterId, variationId = null, options =
  * @param {string} [visualContinuityPrompt] - 视觉连续性提示词（可选）
  * @returns {Promise<Object>} { imageUrl: 本地路径 }
  */
-async function generateShotImage(shotId, visualContinuityPrompt) {
+async function generateShotImage(shotId, visualContinuityPrompt, size) {
   // 获取镜头信息
   const shotResult = await pool.query(
     'SELECT * FROM shots WHERE id = $1',
@@ -356,7 +356,7 @@ async function generateShotImage(shotId, visualContinuityPrompt) {
   }
 
   // 生成图片
-  const result = await generateImage({ prompt });
+  const result = await generateImage({ prompt, size: size || '1344x768' });
   
   // 下载到本地
   const timestamp = Date.now();
