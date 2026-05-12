@@ -6100,7 +6100,7 @@ const handleMoveShot = async (scene, shot, direction) => {
 
 /* ===== 右侧面板样式 ===== */
 .content-right {
-  width: 380px;
+  width: 480px;
   flex-shrink: 0;
   padding-left: 16px;
   overflow-y: auto;
@@ -6299,7 +6299,7 @@ const handleMoveShot = async (scene, shot, direction) => {
 
 .angle-thumb img, .preset-thumb img {
   width: 100%;
-  height: 80px;
+  height: 140px;
   object-fit: cover;
   border-radius: 4px;
   border: 1px solid #f0f2f5;
@@ -6307,7 +6307,7 @@ const handleMoveShot = async (scene, shot, direction) => {
 
 .thumb-empty {
   width: 100%;
-  height: 80px;
+  height: 140px;
   background: #f5f7fa;
   display: flex;
   align-items: center;
