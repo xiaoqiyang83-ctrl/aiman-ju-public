@@ -480,6 +480,7 @@
                       <div class="shot-info-enhanced">
                         <div class="shot-type-row">
                           <el-tag size="small" type="info">{{ shot.shot_type || '中景' }}</el-tag>
+                          <el-tag v-if="shot.camera_angle && shot.camera_angle !== '平视'" size="small" type="warning">{{ shot.camera_angle }}</el-tag>
                           <span class="shot-duration">{{ shot.duration || 3 }}秒</span>
                           <el-button size="small" type="primary" link @click.stop="handleShotClick(shot)">编辑</el-button>
                           <el-button
@@ -508,10 +509,54 @@
                             删除
                           </el-button>
                         </div>
-                        <p class="shot-description">{{ shot.visual_description || shot.description || '暂无描述' }}</p>
+                        
+                        <!-- 结构化提示词区域 -->
+                        <div class="shot-prompt-section" v-if="getVisualPrompt(shot)">
+                          <!-- 色彩条 -->
+                          <div class="prompt-color-bar" v-if="getVisualPrompt(shot).color_palette">
+                            <span class="prompt-label">🎨</span>
+                            <span class="prompt-text">{{ getVisualPrompt(shot).color_palette }}</span>
+                          </div>
+                          <!-- 光影 -->
+                          <div class="prompt-line" v-if="getVisualPrompt(shot).lighting">
+                            <span class="prompt-label">💡</span>
+                            <span class="prompt-text">{{ getVisualPrompt(shot).lighting }}</span>
+                          </div>
+                          <!-- 角色站位 -->
+                          <div class="prompt-line" v-if="getVisualPrompt(shot).character_placement">
+                            <span class="prompt-label">🎭</span>
+                            <span class="prompt-text">{{ getVisualPrompt(shot).character_placement }}</span>
+                          </div>
+                          <!-- 构图 -->
+                          <div class="prompt-line" v-if="getVisualPrompt(shot).composition">
+                            <span class="prompt-label">📐</span>
+                            <span class="prompt-text">{{ getVisualPrompt(shot).composition }}</span>
+                          </div>
+                          <!-- 动作 -->
+                          <div class="prompt-line" v-if="getActionPrompt(shot)?.physical_action">
+                            <span class="prompt-label">🎬</span>
+                            <span class="prompt-text">{{ getActionPrompt(shot).physical_action }}</span>
+                          </div>
+                          <!-- 情绪 -->
+                          <div class="prompt-line" v-if="getEmotionCue(shot)?.primary_emotion">
+                            <span class="prompt-label">{{ getEmotionEmoji(getEmotionCue(shot).primary_emotion) }}</span>
+                            <span class="prompt-text">{{ getEmotionCue(shot).primary_emotion }}</span>
+                          </div>
+                        </div>
+                        
+                        <!-- 兼容旧数据：没有结构化提示词时显示原description -->
+                        <p v-else class="shot-description">{{ shot.visual_description || shot.description || '暂无描述' }}</p>
+                        
+                        <!-- 台词/旁白 -->
+                        <div class="shot-dialogue-row" v-if="shot.dialogue || getNarration(shot)">
+                          <span v-if="shot.dialogue" class="shot-dialogue">💬 {{ shot.dialogue }}</span>
+                          <span v-if="getNarration(shot)" class="shot-narration">📖 {{ getNarration(shot) }}</span>
+                        </div>
+                        
+                        <!-- 运镜 -->
                         <div class="shot-camera">
                           <el-icon><Monitor /></el-icon>
-                          <span>{{ shot.camera_movement || shot.camera || '固定镜头' }}</span>
+                          <span>{{ shot.camera_movement || '固定镜头' }}</span>
                         </div>
                       </div>
                     </div>
@@ -609,6 +654,17 @@
                   <el-table-column label="画面描述" min-width="160" show-overflow-tooltip>
                     <template #default="{ row }">
                       <span class="desc-text">{{ row.visual_description || row.description || '—' }}</span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="提示词" min-width="180" show-overflow-tooltip>
+                    <template #default="{ row }">
+                      <div v-if="getVisualPrompt(row)" class="video-prompt-cell">
+                        <div v-if="getVisualPrompt(row).lighting">💡 {{ getVisualPrompt(row).lighting }}</div>
+                        <div v-if="getVisualPrompt(row).color_palette">🎨 {{ getVisualPrompt(row).color_palette }}</div>
+                        <div v-if="getVisualPrompt(row).composition">📐 {{ getVisualPrompt(row).composition }}</div>
+                        <div v-if="getActionPrompt(row)?.physical_action">🎬 {{ getActionPrompt(row).physical_action }}</div>
+                      </div>
+                      <span v-else class="desc-text">—</span>
                     </template>
                   </el-table-column>
                   <el-table-column label="状态" width="100" align="center">
@@ -4384,6 +4440,64 @@ const getShotStatusText = (status) => {
   return texts[status] || '待生成'
 }
 
+// ==================== 结构化提示词辅助方法 ====================
+// 获取结构化视觉提示词
+const getVisualPrompt = (shot) => {
+  if (shot.visual_prompt_json && typeof shot.visual_prompt_json === 'object') {
+    return shot.visual_prompt_json;
+  }
+  // 兼容：可能是JSON字符串
+  if (typeof shot.visual_prompt_json === 'string') {
+    try { return JSON.parse(shot.visual_prompt_json); } catch(e) {}
+  }
+  return null;
+}
+
+// 获取动作提示词
+const getActionPrompt = (shot) => {
+  if (shot.action_prompt_json && typeof shot.action_prompt_json === 'object') {
+    return shot.action_prompt_json;
+  }
+  if (typeof shot.action_prompt_json === 'string') {
+    try { return JSON.parse(shot.action_prompt_json); } catch(e) {}
+  }
+  return null;
+}
+
+// 获取情绪提示词
+const getEmotionCue = (shot) => {
+  if (shot.emotion_cue_json && typeof shot.emotion_cue_json === 'object') {
+    return shot.emotion_cue_json;
+  }
+  if (typeof shot.emotion_cue_json === 'string') {
+    try { return JSON.parse(shot.emotion_cue_json); } catch(e) {}
+  }
+  return null;
+}
+
+// 获取旁白
+const getNarration = (shot) => {
+  return shot.narration || '';
+}
+
+// 情绪emoji映射
+const getEmotionEmoji = (emotion) => {
+  const map = {
+    '悲伤': '😢', '难过': '😢', '痛苦': '😢', '压抑': '😢',
+    '开心': '😊', '快乐': '😊', '喜悦': '😊', '兴奋': '😊',
+    '愤怒': '😡', '生气': '😡', '暴怒': '😡',
+    '恐惧': '😨', '害怕': '😨', '惊恐': '😨',
+    '惊讶': '😲', '震惊': '😲',
+    '平静': '😌', '淡然': '😌', '冷漠': '😌',
+    '紧张': '😰', '焦虑': '😰',
+    '温柔': '🥰', '爱': '🥰',
+  };
+  for (const [key, emoji] of Object.entries(map)) {
+    if (emotion && emotion.includes(key)) return emoji;
+  }
+  return '💭';
+}
+
 const handleGenerateSceneVideo = async (scene) => {
   ElMessage.success(`正在生成场景 ${scene.scene_number} 的所有视频...`)
   // 生成场景下所有镜头的视频
@@ -5569,6 +5683,82 @@ const handleMoveShot = async (scene, shot, direction) => {
 
 .shot-camera .el-icon {
   color: #409eff;
+}
+
+/* 结构化提示词区域 */
+.shot-prompt-section {
+  padding: 4px 0;
+  font-size: 11px;
+  line-height: 1.5;
+  max-height: 100px;
+  overflow-y: auto;
+}
+.shot-prompt-section::-webkit-scrollbar {
+  width: 3px;
+}
+.shot-prompt-section::-webkit-scrollbar-thumb {
+  background: #c0c4cc;
+  border-radius: 3px;
+}
+.prompt-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  margin-bottom: 2px;
+  color: #606266;
+}
+.prompt-label {
+  flex-shrink: 0;
+  width: 16px;
+  text-align: center;
+}
+.prompt-text {
+  flex: 1;
+  word-break: break-all;
+  color: #303133;
+  font-size: 11px;
+}
+.prompt-color-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 2px;
+  padding: 2px 0;
+}
+.shot-dialogue-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 2px 0;
+  font-size: 11px;
+  margin-top: 4px;
+}
+.shot-dialogue {
+  color: #409EFF;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.shot-narration {
+  color: #909399;
+  font-style: italic;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 视频Tab提示词单元格 */
+.video-prompt-cell {
+  font-size: 11px;
+  line-height: 1.4;
+  color: #606266;
+}
+.video-prompt-cell div {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* 添加镜头卡片 */
