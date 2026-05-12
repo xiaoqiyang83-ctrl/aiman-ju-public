@@ -3930,32 +3930,15 @@ const handleBatchGenerate = async () => {
   
   for (const shot of targetShots) {
     try {
-      if (shot.scene_image_url) {
-        // 图生视频 (I2V) - 优先级最高
-        await videosAPI.image2video(shot.id, {
-          visual_description: shot.visual_description,
-          shot_type: shot.shot_type,
-          camera_movement: shot.camera_movement,
-          scene_image_url: shot.scene_image_url
-        })
-      } else if (shot.character_id) {
-        // 角色参考生视频 (Ref2Video)
-        // 根据镜头选定的角度，动态获取对应的参考图
-        const charRefUrl = getShotCharRef(shot)
-        await videosAPI.reference2video(shot.id, {
-          visual_description: shot.visual_description,
-          shot_type: shot.shot_type,
-          camera_movement: shot.camera_movement,
-          character_id: shot.character_id,
-          reference_image: charRefUrl // 传递特定角度的参考图
-        })
-      } else {
-        // 纯文本生视频 (T2V)
-        await videosAPI.text2video(shot.id, {
-          visual_description: shot.visual_description,
-          shot_type: shot.shot_type,
-          camera_movement: shot.camera_movement
-        })
+      if (!shot.scene_image_url) {
+        failCount++
+        console.warn('镜头' + shot.shot_number + '没有首帧图，跳过')
+        continue
+      }
+      const res = await videosAPI.generateShot(shot.id, { withAudio: true })
+      if (res.success && res.taskId) {
+        cogVideoTaskIds.value[shot.id] = res.taskId
+        pollCogVideoStatus(shot.id)
       }
       successCount++
     } catch (err) {
@@ -3997,33 +3980,18 @@ const handleMergeAll = async () => {
 const handleGenerateSingle = async (row) => {
   ElMessage.success(`正在生成镜头 ${row.shot_number}...`)
   try {
-    if (row.scene_image_url) {
-      // 图生视频 (I2V)
-      await videosAPI.image2video(row.id, {
-        visual_description: row.visual_description,
-        shot_type: row.shot_type,
-        camera_movement: row.camera_movement,
-        scene_image_url: row.scene_image_url
-      })
-    } else if (row.character_id) {
-      // 角色参考生视频
-      const charRefUrl = getShotCharRef(row)
-      await videosAPI.reference2video(row.id, {
-        visual_description: row.visual_description,
-        shot_type: row.shot_type,
-        camera_movement: row.camera_movement,
-        character_id: row.character_id,
-        reference_image: charRefUrl
-      })
-    } else {
-      // 纯文本生视频
-      await videosAPI.text2video(row.id, {
-        visual_description: row.visual_description,
-        shot_type: row.shot_type,
-        camera_movement: row.camera_movement
-      })
+    if (!row.scene_image_url) {
+      ElMessage.warning('请先生成分镜图片')
+      return
     }
-    ElMessage.success('视频生成任务已提交')
+    const res = await videosAPI.generateShot(row.id, { withAudio: true })
+    if (res.success && res.taskId) {
+      cogVideoTaskIds.value[row.id] = res.taskId
+      pollCogVideoStatus(row.id)
+      ElMessage.success('CogVideoX视频生成任务已提交')
+    } else {
+      ElMessage.error(res.message || '视频生成失败')
+    }
     await loadShots()
   } catch (err) {
     console.error('生成视频失败:', err)
@@ -4541,34 +4509,19 @@ const handleGenerateShotVideo = async (shot) => {
       }
     }
     
-    if (shot.scene_image_url) {
-      // 图生视频 (I2V)
-      await videosAPI.image2video(shot.id, {
-        visual_description: shot.visual_description || shot.description,
-        shot_type: shot.shot_type,
-        camera_movement: shot.camera_movement || shot.camera,
-        scene_image_url: shot.scene_image_url
-      })
-    } else if (shot.character_id) {
-      // 角色参考生视频 (Ref2Video)
-      const charRefUrl = getShotCharRef(shot)
-      await videosAPI.reference2video(shot.id, {
-        visual_description: shot.visual_description || shot.description,
-        shot_type: shot.shot_type,
-        camera_movement: shot.camera_movement || shot.camera,
-        character_id: shot.character_id,
-        reference_image: charRefUrl
-      })
-    } else {
-      // 纯文本生视频 (T2V)
-      await videosAPI.text2video(shot.id, {
-        visual_description: shot.visual_description || shot.description,
-        shot_type: shot.shot_type,
-        camera_movement: shot.camera_movement || shot.camera
-      })
+    if (!shot.scene_image_url) {
+      ElMessage.warning('镜头 #' + shot.shot_number + '没有首帧图，请先生成图片')
+      return
     }
-    
-    ElMessage.success(`镜头 #${shot.shot_number} 视频生成任务已提交`)
+    const res = await videosAPI.generateShot(shot.id, { withAudio: true })
+    if (res.success && res.taskId) {
+      cogVideoTaskIds.value[shot.id] = res.taskId
+      pollCogVideoStatus(shot.id)
+      ElMessage.success('镜头 #' + shot.shot_number + ' CogVideoX视频生成任务已提交')
+    } else {
+      ElMessage.error(res.message || '视频生成失败')
+      return
+    }
     await loadScenes()
     await loadShots()
     userStore.fetchCredits() // 刷新积分余额
