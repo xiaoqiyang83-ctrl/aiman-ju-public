@@ -777,31 +777,31 @@
                                 <el-form-item label="语速调节">
                                   <el-slider 
                                     v-model="ttsForm.rate" 
-                                    :min="'-50%'" 
-                                    :max="'50%'" 
-                                    :step="'10%'"
+                                    :min="-50" 
+                                    :max="50" 
+                                    :step="10"
                                     show-input
-                                    :format-tooltip="val => val"
+                                    :format-tooltip="val => val + '%'"
                                   />
                                 </el-form-item>
                                 <el-form-item label="音量调节">
                                   <el-slider 
                                     v-model="ttsForm.volume" 
-                                    :min="'-50%'" 
-                                    :max="'50%'" 
-                                    :step="'10%'"
+                                    :min="-50" 
+                                    :max="50" 
+                                    :step="10"
                                     show-input
-                                    :format-tooltip="val => val"
+                                    :format-tooltip="val => val + '%'"
                                   />
                                 </el-form-item>
                                 <el-form-item label="音调调节">
                                   <el-slider 
                                     v-model="ttsForm.pitch" 
-                                    :min="'-50Hz'" 
-                                    :max="'50Hz'" 
-                                    :step="'10Hz'"
+                                    :min="-50" 
+                                    :max="50" 
+                                    :step="10"
                                     show-input
-                                    :format-tooltip="val => val"
+                                    :format-tooltip="val => val + 'Hz'"
                                   />
                                 </el-form-item>
                               </div>
@@ -2313,11 +2313,23 @@ const voiceList = ref([])
 const ttsForm = reactive({
   voiceId: '',
   text: '',
-  volume: '+0%',     // 音量：-50% ~ +50%
-  rate: '+0%',       // 语速：-50% ~ +50%
-  pitch: '+0Hz',     // 音调：-50Hz ~ +50Hz
+  volume: 0,         // 音量：-50 ~ +50（提交API时转为'+0%'格式）
+  rate: 0,           // 语速：-50 ~ +50（提交API时转为'+0%'格式）
+  pitch: 0,          // 音调：-50 ~ +50（提交API时转为'+0Hz'格式）
   emotion: ''        // 情感风格
 })
+
+// 将数字参数转为Edge TTS格式字符串
+function formatTTSParams() {
+  const r = ttsForm.rate
+  const v = ttsForm.volume
+  const p = ttsForm.pitch
+  return {
+    rate: `${r >= 0 ? '+' : ''}${r}%`,
+    volume: `${v >= 0 ? '+' : ''}${v}%`,
+    pitch: `${p >= 0 ? '+' : ''}${p}Hz`
+  }
+}
 const ttsLoading = ref(false)
 
 // 情感风格列表
@@ -2385,12 +2397,13 @@ const handleShotTTS = async (shot) => {
     return
   }
   try {
+    const params = formatTTSParams()
     const res = await ttsAPI.generate({
       shotId: shot.id,
       voice: ttsForm.voiceId || 'zh-CN-XiaoxiaoNeural',
-      volume: ttsForm.volume,
-      rate: ttsForm.rate,
-      pitch: ttsForm.pitch,
+      volume: params.volume,
+      rate: params.rate,
+      pitch: params.pitch,
       emotion: ttsForm.emotion
     })
     if (res.success) {
@@ -2428,12 +2441,13 @@ const handleBatchTTS = async () => {
 
   batchTTSLoading.value = true
   try {
+    const params = formatTTSParams()
     const res = await ttsAPI.generateBatch({
       scriptId: currentScriptId.value,
       voice: ttsForm.voiceId || 'zh-CN-XiaoxiaoNeural',
-      volume: ttsForm.volume,
-      rate: ttsForm.rate,
-      pitch: ttsForm.pitch,
+      volume: params.volume,
+      rate: params.rate,
+      pitch: params.pitch,
       emotion: ttsForm.emotion
     })
     if (res.success) {
