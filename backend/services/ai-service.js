@@ -1024,11 +1024,12 @@ async function generateStoryboardFromScript(params) {
     }
     
     // v5.4: 根据剧本字数决定处理策略
-    // 2000字以下走单次调用，2000字以上按场景分段处理
+    // flashx 4096 tokens 硬限制，即使扁平格式1200字剧本也会超
+    // 500字以下走单次调用，500字以上按场景分段处理（每次只输出一小段）
     var contentLength = scriptContent.length;
     console.log('[AI Service] 剧本字数:', contentLength);
     
-    if (contentLength < 2000) {
+    if (contentLength < 500) {
         return await generateStoryboardSingle(params, provider);
     } else {
         return await generateStoryboardByScene(params, provider);
