@@ -138,30 +138,44 @@ async function generateImage({ prompt, model = DEFAULT_MODEL, size = DEFAULT_SIZ
   console.log('[ImageService] 开始生成图片, model=' + model + ', size=' + size);
   console.log('[ImageService] Prompt: ' + prompt.substring(0, 100) + '...');
 
-  const response = await fetch(ZHIPU_BASE_URL + '/images/generations', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer ' + ZHIPU_API_KEY
-    },
-    body: JSON.stringify(requestBody)
-  });
+  // 429重试逻辑
+  const MAX_RETRIES = 3;
+  let lastError = null;
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    const response = await fetch(ZHIPU_BASE_URL + '/images/generations', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + ZHIPU_API_KEY
+      },
+      body: JSON.stringify(requestBody)
+    });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error('CogView API错误: ' + response.status + ' - ' + errorText);
+    if (!response.ok) {
+      const errorText = await response.text();
+      if (response.status === 429 && attempt < MAX_RETRIES) {
+        const delay = attempt * 5000; // 5s, 10s, 15s
+        console.log('[ImageService] 429限流，第' + attempt + '次重试，等待' + (delay/1000) + '秒...');
+        await new Promise(resolve => setTimeout(resolve, delay));
+        lastError = new Error('CogView API错误: ' + response.status + ' - ' + errorText);
+        continue;
+      }
+      throw new Error('CogView API错误: ' + response.status + ' - ' + errorText);
+    }
+
+    const result = await response.json();
+    
+    if (!result.data || !result.data[0] || !result.data[0].url) {
+      throw new Error('CogView API返回格式错误: ' + JSON.stringify(result));
+    }
+
+    const imageUrl = result.data[0].url;
+    console.log('[ImageService] 图片生成成功: ' + imageUrl);
+
+    return { url: imageUrl };
   }
-
-  const result = await response.json();
   
-  if (!result.data || !result.data[0] || !result.data[0].url) {
-    throw new Error('CogView API返回格式错误: ' + JSON.stringify(result));
-  }
-
-  const imageUrl = result.data[0].url;
-  console.log('[ImageService] 图片生成成功: ' + imageUrl);
-
-  return { url: imageUrl };
+  throw lastError || new Error('CogView API重试失败');
 }
 
 /**
