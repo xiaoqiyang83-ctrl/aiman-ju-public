@@ -1089,7 +1089,7 @@
           <el-tab-pane label="基本信息">
             <div class="form-row">
               <el-form-item label="角色名称" style="flex: 1">
-                <el-input v-model="charForm.name" placeholder="请输入角色名称" />
+                <el-input v-model="charForm.name" placeholder="输入角色名称，如：林风、阿空" />
               </el-form-item>
               <el-form-item label="性别" style="width: 100px">
                 <el-select v-model="charForm.gender" clearable placeholder="选择">
@@ -1524,8 +1524,139 @@
       </template>
     </el-dialog>
 
+    <!-- 角色详情弹窗（选中角色时显示） -->
+    <el-dialog v-model="showCharacterDetail" title="角色详情" width="680px" :close-on-click-modal="true">
+      <div v-if="selectedCharacter" class="character-detail-dialog">
+        <div class="character-avatar-large">
+          <img :src="getAssetUrl(selectedCharacter.front_image_url || selectedCharacter.image_url || selectedCharacter.reference_image)" :alt="selectedCharacter.name" />
+        </div>
+        <div class="character-info">
+          <h3>{{ selectedCharacter.name }}</h3>
+          <div class="char-tags-large">
+            <el-tag v-if="selectedCharacter.gender" type="info">{{ selectedCharacter.gender }}</el-tag>
+            <el-tag v-if="selectedCharacter.occupation" type="warning">{{ selectedCharacter.occupation }}</el-tag>
+            <el-tag v-if="selectedCharacter.identity_anchors && Object.keys(selectedCharacter.identity_anchors).length > 0" type="success" effect="dark">已校准</el-tag>
+            <el-tag v-else type="danger">未校准</el-tag>
+          </div>
+          <p v-if="selectedCharacter.description" class="char-desc">{{ selectedCharacter.description }}</p>
+          
+          <!-- 多角度展示 -->
+          <div class="angles-display">
+            <h5>角度参考</h5>
+            <div class="angles-grid">
+              <div class="angle-thumb" :class="{ 'has-image': selectedCharacter.front_image_url }">
+                <img v-if="selectedCharacter.front_image_url" :src="getAssetUrl(selectedCharacter.front_image_url)" />
+                <div v-else class="thumb-empty" @click="handleGenerateCharView(selectedCharacter, 'front')" title="点击生成">正</div>
+                <span>正面</span>
+                <el-button v-if="!selectedCharacter.front_image_url" size="mini" type="primary" @click.stop="handleGenerateCharView(selectedCharacter, 'front')">生成</el-button>
+              </div>
+              <div class="angle-thumb" :class="{ 'has-image': selectedCharacter.side_image_url }">
+                <img v-if="selectedCharacter.side_image_url" :src="getAssetUrl(selectedCharacter.side_image_url)" />
+                <div v-else class="thumb-empty" @click="handleGenerateCharView(selectedCharacter, 'side')" title="点击生成">侧</div>
+                <span>侧面</span>
+                <el-button v-if="!selectedCharacter.side_image_url" size="mini" type="success" @click.stop="handleGenerateCharView(selectedCharacter, 'side')">生成</el-button>
+              </div>
+              <div class="angle-thumb" :class="{ 'has-image': selectedCharacter.back_image_url }">
+                <img v-if="selectedCharacter.back_image_url" :src="getAssetUrl(selectedCharacter.back_image_url)" />
+                <div v-else class="thumb-empty" @click="handleGenerateCharView(selectedCharacter, 'back')" title="点击生成">背</div>
+                <span>背面</span>
+                <el-button v-if="!selectedCharacter.back_image_url" size="mini" type="warning" @click.stop="handleGenerateCharView(selectedCharacter, 'back')">生成</el-button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 表情与换装 -->
+          <div v-if="selectedCharacter.expressions?.length" class="presets-display">
+            <h5>表情预设</h5>
+            <div class="presets-grid">
+              <div v-for="exp in selectedCharacter.expressions" :key="exp.name" class="preset-thumb">
+                <img :src="getAssetUrl(exp.url)" />
+                <span>{{ exp.name }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="selectedCharacter.costumes?.length" class="presets-display">
+            <h5>换装预设</h5>
+            <div class="presets-grid">
+              <div v-for="cos in selectedCharacter.costumes" :key="cos.name" class="preset-thumb">
+                <img :src="getAssetUrl(cos.url)" />
+                <span>{{ cos.name }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="character-actions">
+          <el-button type="primary" @click="handleEditCharacter(selectedCharacter)">编辑角色</el-button>
+          <el-select v-model="charImageStyle" size="default" style="width: 130px; margin-right: 8px;">
+            <el-option label="日系动漫" value="anime" />
+            <el-option label="国风仙侠" value="chinese_fantasy" />
+            <el-option label="赛博朋克" value="cyberpunk" />
+            <el-option label="写实风格" value="realistic" />
+            <el-option label="吉卜力" value="ghibli" />
+            <el-option label="美漫风格" value="american_comic" />
+          </el-select>
+          <el-button type="success" @click="handleGenCharImage(selectedCharacter)" :loading="generatingImage[selectedCharacter.id]">
+            <el-icon><Picture /></el-icon>
+            {{ generatingImage[selectedCharacter.id] ? '生成中...' : 'AI生成三视图' }}
+          </el-button>
+          <el-button type="warning" @click="handleCalibrateCharacter(selectedCharacter)" :loading="calibratingCharacter[selectedCharacter.id]">
+            <el-icon><MagicStick /></el-icon>
+            AI校准
+          </el-button>
+          <el-button type="info" @click="showVariationsDialog(selectedCharacter)">
+            <el-icon><Grid /></el-icon>
+            变体管理
+          </el-button>
+        </div>
+        <!-- 多视角生成按钮 -->
+        <div class="multi-view-actions">
+          <span class="view-actions-label">多视角生成:</span>
+          <el-button size="small" type="primary" :loading="generatingCharView[selectedCharacter.id + '_front']" :disabled="!selectedCharacter.visual_prompt_en && !selectedCharacter.identity_anchors" @click="handleGenerateCharView(selectedCharacter, 'front')">
+            正面
+          </el-button>
+          <el-button size="small" type="success" :loading="generatingCharView[selectedCharacter.id + '_side']" :disabled="!selectedCharacter.visual_prompt_en && !selectedCharacter.identity_anchors" @click="handleGenerateCharView(selectedCharacter, 'side')">
+            侧面
+          </el-button>
+          <el-button size="small" type="warning" :loading="generatingCharView[selectedCharacter.id + '_back']" :disabled="!selectedCharacter.visual_prompt_en && !selectedCharacter.identity_anchors" @click="handleGenerateCharView(selectedCharacter, 'back')">
+            背面
+          </el-button>
+        </div>
+        <!-- 6层锚点展示 -->
+        <div v-if="selectedCharacter.identity_anchors" class="anchors-display">
+          <h5>6层身份锚点</h5>
+          <div class="anchors-grid">
+            <div class="anchor-item" v-if="selectedCharacter.identity_anchors.gender">
+              <span class="anchor-label">性别</span>
+              <span class="anchor-value">{{ selectedCharacter.identity_anchors.gender }}</span>
+            </div>
+            <div class="anchor-item" v-if="selectedCharacter.identity_anchors.age">
+              <span class="anchor-label">年龄</span>
+              <span class="anchor-value">{{ selectedCharacter.identity_anchors.age }}</span>
+            </div>
+            <div class="anchor-item" v-if="selectedCharacter.identity_anchors.physique">
+              <span class="anchor-label">体型</span>
+              <span class="anchor-value">{{ selectedCharacter.identity_anchors.physique }}</span>
+            </div>
+            <div class="anchor-item" v-if="selectedCharacter.identity_anchors.face">
+              <span class="anchor-label">面部</span>
+              <span class="anchor-value">{{ selectedCharacter.identity_anchors.face }}</span>
+            </div>
+            <div class="anchor-item" v-if="selectedCharacter.identity_anchors.hair">
+              <span class="anchor-label">发型</span>
+              <span class="anchor-value">{{ selectedCharacter.identity_anchors.hair }}</span>
+            </div>
+            <div class="anchor-item" v-if="selectedCharacter.identity_anchors.clothing">
+              <span class="anchor-label">服饰</span>
+              <span class="anchor-value">{{ selectedCharacter.identity_anchors.clothing }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </el-dialog>
+
     <!-- ===== 问题5修复：右侧Tab面板 - 角色和视频预览 ===== -->
-    <div class="content-right" v-if="showVideoPlayer || selectedCharacter">
+    <div class="content-right" v-if="showVideoPlayer">
       <div class="right-panel">
         <div class="panel-content">
           <!-- 视频预览（选中镜头时自动显示） -->
@@ -1573,134 +1704,7 @@
               <el-button type="success" @click="handleDownloadVideo(currentPreviewVideo)">下载视频</el-button>
             </div>
           </div>
-          
-          <!-- 角色详情（选中角色时自动显示） -->
-          <div v-if="selectedCharacter" class="character-preview-panel">
-            <h4 class="panel-title">
-              <span><el-icon><User /></el-icon> 角色详情</span>
-              <el-button size="small" text @click="selectedCharacter = null">
-                <el-icon><Close /></el-icon>
-              </el-button>
-            </h4>
-            <div class="character-avatar-large">
-              <img :src="getAssetUrl(selectedCharacter.front_image_url || selectedCharacter.image_url || selectedCharacter.reference_image)" :alt="selectedCharacter.name" />
-            </div>
-            <div class="character-info">
-              <h3>{{ selectedCharacter.name }}</h3>
-              <div class="char-tags-large">
-                <el-tag v-if="selectedCharacter.gender" type="info">{{ selectedCharacter.gender }}</el-tag>
-                <el-tag v-if="selectedCharacter.occupation" type="warning">{{ selectedCharacter.occupation }}</el-tag>
-                <el-tag v-if="selectedCharacter.identity_anchors && Object.keys(selectedCharacter.identity_anchors).length > 0" type="success" effect="dark">已校准</el-tag>
-                <el-tag v-else type="danger">未校准</el-tag>
-              </div>
-              <p v-if="selectedCharacter.description" class="char-desc">{{ selectedCharacter.description }}</p>
-              
-              <!-- 多角度展示 -->
-              <div class="angles-display">
-                <h5>角度参考</h5>
-                <div class="angles-grid">
-                  <div class="angle-thumb" :class="{ 'has-image': selectedCharacter.front_image_url }">
-                    <img v-if="selectedCharacter.front_image_url" :src="getAssetUrl(selectedCharacter.front_image_url)" />
-                    <div v-else class="thumb-empty" @click="handleGenerateCharView(selectedCharacter, 'front')" title="点击生成">正</div>
-                    <span>正面</span>
-                    <el-button v-if="!selectedCharacter.front_image_url" size="mini" type="primary" @click.stop="handleGenerateCharView(selectedCharacter, 'front')">生成</el-button>
-                  </div>
-                  <div class="angle-thumb" :class="{ 'has-image': selectedCharacter.side_image_url }">
-                    <img v-if="selectedCharacter.side_image_url" :src="getAssetUrl(selectedCharacter.side_image_url)" />
-                    <div v-else class="thumb-empty" @click="handleGenerateCharView(selectedCharacter, 'side')" title="点击生成">侧</div>
-                    <span>侧面</span>
-                    <el-button v-if="!selectedCharacter.side_image_url" size="mini" type="success" @click.stop="handleGenerateCharView(selectedCharacter, 'side')">生成</el-button>
-                  </div>
-                  <div class="angle-thumb" :class="{ 'has-image': selectedCharacter.back_image_url }">
-                    <img v-if="selectedCharacter.back_image_url" :src="getAssetUrl(selectedCharacter.back_image_url)" />
-                    <div v-else class="thumb-empty" @click="handleGenerateCharView(selectedCharacter, 'back')" title="点击生成">背</div>
-                    <span>背面</span>
-                    <el-button v-if="!selectedCharacter.back_image_url" size="mini" type="warning" @click.stop="handleGenerateCharView(selectedCharacter, 'back')">生成</el-button>
-                  </div>
-                </div>
-              </div>
 
-              <!-- 表情与换装 -->
-              <div v-if="selectedCharacter.expressions?.length" class="presets-display">
-                <h5>表情预设</h5>
-                <div class="presets-grid">
-                  <div v-for="exp in selectedCharacter.expressions" :key="exp.name" class="preset-thumb">
-                    <img :src="getAssetUrl(exp.url)" />
-                    <span>{{ exp.name }}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div v-if="selectedCharacter.costumes?.length" class="presets-display">
-                <h5>换装预设</h5>
-                <div class="presets-grid">
-                  <div v-for="cos in selectedCharacter.costumes" :key="cos.name" class="preset-thumb">
-                    <img :src="getAssetUrl(cos.url)" />
-                    <span>{{ cos.name }}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div class="character-actions">
-              <el-button type="primary" @click="handleEditCharacter(selectedCharacter)">编辑角色</el-button>
-              <el-button type="success" @click="handleGenCharImage(selectedCharacter)" :loading="generatingImage[selectedCharacter.id]">
-                <el-icon><Picture /></el-icon>
-                {{ generatingImage[selectedCharacter.id] ? '生成中...' : 'AI生成三视图' }}
-              </el-button>
-              <el-button type="warning" @click="handleCalibrateCharacter(selectedCharacter)" :loading="calibratingCharacter[selectedCharacter.id]">
-                <el-icon><MagicStick /></el-icon>
-                AI校准
-              </el-button>
-              <el-button type="info" @click="showVariationsDialog(selectedCharacter)">
-                <el-icon><Grid /></el-icon>
-                变体管理
-              </el-button>
-            </div>
-            <!-- 多视角生成按钮 -->
-            <div class="multi-view-actions">
-              <span class="view-actions-label">多视角生成:</span>
-              <el-button size="small" type="primary" :loading="generatingCharView[selectedCharacter.id + '_front']" :disabled="!selectedCharacter.visual_prompt_en && !selectedCharacter.identity_anchors" @click="handleGenerateCharView(selectedCharacter, 'front')">
-                正面
-              </el-button>
-              <el-button size="small" type="success" :loading="generatingCharView[selectedCharacter.id + '_side']" :disabled="!selectedCharacter.visual_prompt_en && !selectedCharacter.identity_anchors" @click="handleGenerateCharView(selectedCharacter, 'side')">
-                侧面
-              </el-button>
-              <el-button size="small" type="warning" :loading="generatingCharView[selectedCharacter.id + '_back']" :disabled="!selectedCharacter.visual_prompt_en && !selectedCharacter.identity_anchors" @click="handleGenerateCharView(selectedCharacter, 'back')">
-                背面
-              </el-button>
-            </div>
-            <!-- 6层锚点展示 -->
-            <div v-if="selectedCharacter.identity_anchors" class="anchors-display">
-              <h5>6层身份锚点</h5>
-              <div class="anchors-grid">
-                <div class="anchor-item" v-if="selectedCharacter.identity_anchors.gender">
-                  <span class="anchor-label">性别</span>
-                  <span class="anchor-value">{{ selectedCharacter.identity_anchors.gender }}</span>
-                </div>
-                <div class="anchor-item" v-if="selectedCharacter.identity_anchors.age">
-                  <span class="anchor-label">年龄</span>
-                  <span class="anchor-value">{{ selectedCharacter.identity_anchors.age }}</span>
-                </div>
-                <div class="anchor-item" v-if="selectedCharacter.identity_anchors.physique">
-                  <span class="anchor-label">体型</span>
-                  <span class="anchor-value">{{ selectedCharacter.identity_anchors.physique }}</span>
-                </div>
-                <div class="anchor-item" v-if="selectedCharacter.identity_anchors.face">
-                  <span class="anchor-label">面部</span>
-                  <span class="anchor-value">{{ selectedCharacter.identity_anchors.face }}</span>
-                </div>
-                <div class="anchor-item" v-if="selectedCharacter.identity_anchors.hair">
-                  <span class="anchor-label">发型</span>
-                  <span class="anchor-value">{{ selectedCharacter.identity_anchors.hair }}</span>
-                </div>
-                <div class="anchor-item" v-if="selectedCharacter.identity_anchors.clothing">
-                  <span class="anchor-label">服饰</span>
-                  <span class="anchor-value">{{ selectedCharacter.identity_anchors.clothing }}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-          
           <!-- v5.0 角色变体管理弹窗 -->
     <el-dialog v-model="showVariationsDialogFlag" title="角色变体管理" width="700px">
       <div class="variations-header">
@@ -2027,6 +2031,13 @@ watch(() => props.activeTab, (newTab) => {
   }
 })
 
+// 监听角色详情弹窗关闭，清空选中角色
+watch(showCharacterDetail, (val) => {
+  if (!val) {
+    selectedCharacter.value = null
+  }
+})
+
 // ==================== 剧本相关 ====================
 const loadingScripts = ref(false)
 const scriptSearch = ref('')
@@ -2059,6 +2070,8 @@ const loadingCharacters = ref(false)
 const characterSearch = ref('')
 const characters = ref([])
 const showCharacterDialog = ref(false)
+const showCharacterDetail = ref(false)  // 角色详情弹窗
+const charImageStyle = ref('anime')  // 三视图风格选择
 const creatingCharacter = ref(false)
 const generatingImage = reactive({})
 const generatingShotImage = reactive({})
@@ -2126,10 +2139,11 @@ const toggleVideoPlay = () => {
   }
 }
 
-// 点击角色卡片时显示右侧面板
+// 点击角色卡片时显示角色详情弹窗
 const handleCharacterClick = (char) => {
   currentPreviewVideo.value = null  // 清除视频预览
   selectedCharacter.value = char
+  showCharacterDetail.value = true
 }
 
 // ==================== 场景/分镜相关 ====================
@@ -3015,10 +3029,10 @@ const handleGenCharImage = async (char) => {
   }
   
   generatingImage[char.id] = true
-  ElMessage.info('正在使用CogView生成角色三视图（正面/侧面/背面）...')
+  ElMessage.info(`正在使用CogView生成角色三视图（风格：${charImageStyle.value}）...`)
   
   try {
-    const response = await charactersAPI.generateImage(char.id, {})
+    const response = await charactersAPI.generateImage(char.id, { style: charImageStyle.value })
     if (response.success) {
       const viewCount = [response.front_image_url, response.side_image_url, response.back_image_url].filter(Boolean).length
       ElMessage.success(`角色三视图生成完成（${viewCount}个视角）`)

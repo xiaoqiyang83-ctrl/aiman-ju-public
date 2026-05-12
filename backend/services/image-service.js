@@ -30,6 +30,16 @@ const COGVIEW_MODELS = {
 const DEFAULT_MODEL = 'cogview-3-flash';
 const DEFAULT_SIZE = '1024x1024';
 
+// 角色三视图风格配置
+const STYLE_MAP = {
+  anime: 'anime style, flat color, clean lines',
+  chinese_fantasy: 'Chinese ink painting style, elegant, flowing robes, traditional fantasy',
+  cyberpunk: 'cyberpunk style, neon lighting, futuristic, high-tech',
+  realistic: 'photorealistic, detailed skin texture, cinematic lighting',
+  ghibli: 'Studio Ghibli style, soft watercolor, warm lighting, whimsical',
+  american_comic: 'American comic book style, bold outlines, dynamic shading, vivid colors'
+};
+
 /**
  * 根据角色身份锚点构建基础提示词
  * @param {Object} character - 角色对象
@@ -184,10 +194,11 @@ async function generateImage({ prompt, model = DEFAULT_MODEL, size = DEFAULT_SIZ
  * @param {number} [variationId] - 变体ID（可选）
  * @param {Object} [options] - 额外选项
  * @param {string} [options.prompt] - 自定义提示词（如果有）
+ * @param {string} [options.style] - 风格类型 (anime/chinese_fantasy/cyberpunk/realistic/ghibli/american_comic)
  * @returns {Promise<Object>} { front, side, back } 各视角本地路径
  */
 async function generateCharacterImage(characterId, variationId = null, options = {}) {
-  const { prompt: customPrompt } = options;
+  const { prompt: customPrompt, style = 'anime' } = options;
   const { compileCharacterPrompt } = require('./character_calibration');
   
   // 获取角色信息
@@ -241,7 +252,9 @@ async function generateCharacterImage(characterId, variationId = null, options =
   try {
     console.log('[ImageService] 开始生成角色设定图(character sheet)...');
     
-    const sheetPrompt = `Character sheet of ${visualPrompt}, three views, front view, side view, back view, full body, same character, consistent design, flat color, clean lines, white background, anime style, masterpiece, best quality`;
+    // 获取风格后缀
+    const styleSuffix = STYLE_MAP[style] || STYLE_MAP.anime;
+    const sheetPrompt = `Character sheet of ${visualPrompt}, three views, front view, side view, back view, full body, same character, consistent design, flat color, clean lines, white background, ${styleSuffix}, masterpiece, best quality`;
     
     // 使用16:9宽幅比例，适合三视图并排布局
     const result = await generateImage({ prompt: sheetPrompt, size: '1440x720' });

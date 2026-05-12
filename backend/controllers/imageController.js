@@ -85,7 +85,7 @@ async function generateShot(req, res) {
 async function generateCharacter(req, res) {
   try {
     const { id } = req.params;  // 从characters路由来，参数名是:id，不是:characterId
-    const { variation_id, prompt } = req.body || {};
+    const { variation_id, prompt, style } = req.body || {};
     
     if (!id) {
       return res.status(400).json({ 
@@ -97,7 +97,7 @@ async function generateCharacter(req, res) {
     const results = await imageService.generateCharacterImage(
       parseInt(id), 
       variation_id ? parseInt(variation_id) : null,
-      { prompt }
+      { prompt, style }
     );
 
     res.json({
