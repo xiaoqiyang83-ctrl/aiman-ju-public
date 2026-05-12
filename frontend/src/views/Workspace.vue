@@ -2070,6 +2070,7 @@ const generatingSceneImage = reactive({})
 const generatingCharView = reactive({})
 const calibratingCharacter = reactive({})
 const cogVideoTaskIds = ref({})
+const cogVideoTaskTimers = ref({})
 const isEditingCharacter = ref(false)
 const currentEditingCharacter = ref(null)
 const charForm = reactive({
