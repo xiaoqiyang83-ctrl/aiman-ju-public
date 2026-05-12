@@ -130,7 +130,7 @@ async function generateVideo({ prompt, imageUrl, model = DEFAULT_MODEL, size = D
   }
 
   // 429重试逻辑
-  const MAX_RETRIES = 3;
+  const MAX_RETRIES = 5;
   let lastError = null;
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     const response = await fetch(ZHIPU_BASE_URL + '/videos/generations', {
@@ -145,7 +145,7 @@ async function generateVideo({ prompt, imageUrl, model = DEFAULT_MODEL, size = D
     if (!response.ok) {
       const errorText = await response.text();
       if (response.status === 429 && attempt < MAX_RETRIES) {
-        const delay = attempt * 8000; // 8s, 16s, 24s - 视频生成限流更严
+        const delay = attempt * 15000; // 15s, 30s, 45s, 60s, 75s
         console.log('[VideoGenerateService] 429限流，第' + attempt + '次重试，等待' + (delay/1000) + '秒...');
         await new Promise(resolve => setTimeout(resolve, delay));
         lastError = new Error('CogVideoX API错误: ' + response.status + ' - ' + errorText);
