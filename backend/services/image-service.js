@@ -257,7 +257,7 @@ async function generateCharacterImage(characterId, variationId = null, options =
     const sheetPrompt = `Character sheet of ${visualPrompt}, three views, front view, side view, back view, full body, same character, consistent design, flat color, clean lines, white background, ${styleSuffix}, masterpiece, best quality`;
     
     // 使用16:9宽幅比例，适合三视图并排布局
-    const result = await generateImage({ prompt: sheetPrompt, size: '1440x720' });
+    const result = await generateImage({ prompt: sheetPrompt, size: '1344x768' });
     
     // 下载完整设定图
     const sheetFilename = `char-${characterId}-sheet-${variationId || 'base'}-${timestamp}.png`;
@@ -271,6 +271,11 @@ async function generateCharacterImage(characterId, variationId = null, options =
     const metadata = await image.metadata();
     const width = metadata.width;
     const height = metadata.height;
+    
+    if (!width || !height) {
+      throw new Error('无法读取设定图尺寸，裁切失败');
+    }
+    
     const sliceWidth = Math.floor(width / 3);
     
     const views = [

@@ -254,11 +254,19 @@ export const getAssetUrl = (url) => {
 // ==================== TTS配音相关 ====================
 export const ttsAPI = {
   // 获取可用音色列表
-  getVoices: () => api.get('/tts/voices'),
+  getVoices: (gender) => api.get('/tts/voices' + (gender ? '?gender=' + gender : '')),
+  // 获取音色详情
+  getVoiceDetail: (voiceId) => api.get('/tts/voice/' + voiceId),
+  // 获取支持的情感风格列表
+  getEmotions: () => api.get('/tts/emotions'),
   // 生成单个镜头配音
   generate: (data) => api.post('/tts/generate', data),
   // 批量生成配音
   generateBatch: (data) => api.post('/tts/generate-batch', data),
+  // 预览配音（不保存）
+  preview: (data) => api.post('/tts/preview', data),
+  // 文本转音频
+  textToAudio: (data) => api.post('/tts/text-to-audio', data),
   // 删除镜头配音
   remove: (shotId) => api.delete('/tts/' + shotId),
   // 获取剧本下所有镜头的配音状态

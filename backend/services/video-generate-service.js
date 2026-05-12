@@ -341,7 +341,8 @@ async function generateShotVideo(shotId, options = {}) {
   // 处理图片URL：如果是本地路径，转为base64；如果是公网URL，直接使用
   let finalImageUrl = imageUrl;
   if (!imageUrl.startsWith('http') && !imageUrl.startsWith('data:')) {
-    const localPath = path.join(__dirname, '..' + (imageUrl.startsWith('/') ? imageUrl : '/' + imageUrl));
+    const relativePath = imageUrl.startsWith('/') ? imageUrl.slice(1) : imageUrl;
+    const localPath = path.join(__dirname, '..', relativePath);
     if (fs.existsSync(localPath)) {
       // 读取本地文件转base64
       const imageBuffer = fs.readFileSync(localPath);

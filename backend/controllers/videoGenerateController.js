@@ -111,7 +111,9 @@ async function getTaskStatus(req, res) {
           result.localVideoPath = updatedShot.rows[0]?.video_url;
         } catch (downloadError) {
           console.error('[VideoGenerate] 下载视频失败:', downloadError);
-          result.downloadError = downloadError.message;
+          result.status = 'failed';
+          result.error = '视频下载失败: ' + downloadError.message;
+          result.videoUrl = undefined;
         }
       }
     }
