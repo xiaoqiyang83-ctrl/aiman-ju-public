@@ -1264,7 +1264,7 @@
             <el-option label="背面" value="back" />
           </el-select>
         </div>
-        <div v-if="currentShot.character_id" class="char-ref-preview">
+        <div v-if="currentShot.character_id && currentShot.character_angle" class="char-ref-preview">
           <img :src="getAssetUrl(getShotCharRef(currentShot))" alt="参考图预览" />
         </div>
       </el-form-item>
