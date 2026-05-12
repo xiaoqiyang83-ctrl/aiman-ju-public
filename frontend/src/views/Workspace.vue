@@ -2069,6 +2069,7 @@ const batchCancelled = ref(false)
 const generatingSceneImage = reactive({})
 const generatingCharView = reactive({})
 const calibratingCharacter = reactive({})
+const cogVideoTaskIds = ref({})
 const isEditingCharacter = ref(false)
 const currentEditingCharacter = ref(null)
 const charForm = reactive({
