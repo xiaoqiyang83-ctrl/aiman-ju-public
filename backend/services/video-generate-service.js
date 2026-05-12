@@ -184,6 +184,11 @@ async function getVideoTaskStatus(taskId) {
 
   if (!response.ok) {
     const errorText = await response.text();
+    // 404表示任务刚提交还没入库，返回processing而不是报错
+    if (response.status === 404) {
+      console.log('[VideoGenerateService] 任务尚未入库(404)，继续等待...');
+      return { status: 'processing' };
+    }
     throw new Error('查询任务状态失败: ' + response.status + ' - ' + errorText);
   }
 
