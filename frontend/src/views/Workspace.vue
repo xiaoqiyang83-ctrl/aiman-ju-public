@@ -596,13 +596,6 @@
             <div class="tab-content video-content">
               <div class="content-toolbar">
                 <el-button 
-                  type="danger"
-                  @click="handleBatchGenerateCogVideo"
-                >
-                  <el-icon><VideoPlay /></el-icon>
-                  CogVideoX批量生成
-                </el-button>
-                <el-button 
                   :type="selectedShotIds.length > 0 ? 'primary' : 'default'" 
                   @click="handleBatchGenerate"
                 >
