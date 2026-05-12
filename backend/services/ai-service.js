@@ -396,36 +396,6 @@ const generateText = async ({
     }
 };
 
-// v5.4: 不同模型的最大token限制
-const MODEL_MAX_TOKENS = {
-    'glm-4-flashx': 4096,
-    'glm-4-flash': 4096,
-    'glm-4': 8192,
-    'glm-4v': 4096,
-    'qwen-turbo': 8192,
-    'qwen-plus': 32768,
-    'qwen-max': 8192,
-    'gpt-3.5-turbo': 16385,
-    'gpt-4': 8192,
-    'gpt-4-turbo': 128000
-};
-
-// 根据provider和model获取合理的maxTokens
-function getReasonableMaxTokens(provider, config, requestedMaxTokens) {
-    var model = (config.model || '').toLowerCase();
-    
-    // 查找匹配的token限制
-    for (var key in MODEL_MAX_TOKENS) {
-        if (model.indexOf(key.toLowerCase()) >= 0) {
-            var limit = MODEL_MAX_TOKENS[key];
-            return Math.min(requestedMaxTokens || 4096, limit);
-        }
-    }
-    
-    // 默认限制为4096
-    return Math.min(requestedMaxTokens || 4096, 4096);
-}
-
 const generateTextWithProvider = async (provider, { system, user, temperature = 0.7, maxTokens = 2000, enableRetry = true }) => {
     const p = provider === 'openai-compatible' ? 'default' : String(provider || '').trim();
     const config = AI_CONFIG[p] || AI_CONFIG.default;
@@ -439,10 +409,6 @@ const generateTextWithProvider = async (provider, { system, user, temperature = 
         throw new Error('AI API未配置，请设置 AI_API_KEY（OpenAI兼容）或 SILICONFLOW_API_KEY/OPENAI_API_KEY');
     }
 
-    // v5.4: 根据模型限制调整maxTokens
-    const effectiveMaxTokens = getReasonableMaxTokens(p, config, maxTokens);
-    console.log('[AI Service] maxTokens调整:', maxTokens, '->', effectiveMaxTokens, '(model:', config.model, ')');
-
     const requestFn = async () => {
         console.log(`[AI Service] 使用 ${p} provider`);
         console.log(`[AI Service] 模型: ${config.model}`);
@@ -455,7 +421,7 @@ const generateTextWithProvider = async (provider, { system, user, temperature = 
             model: config.model,
             messages,
             temperature,
-            max_tokens: effectiveMaxTokens,
+            max_tokens: maxTokens,
         };
 
         const url = config.baseURL.replace(/\/$/, '') + '/chat/completions';
@@ -493,18 +459,17 @@ const generateTextWithProvider = async (provider, { system, user, temperature = 
     return enableRetry ? await withRetry(requestFn) : await requestFn();
 };
 
-// ==================== 分镜拆分模块（v5.4 提示词编译体系）====================
+// ==================== 分镜拆分模块（v5.3 提示词编译体系）====================
 // 设计参考：魔因漫创 + AI Comic Builder + 行业最佳实践
 // 核心改动：
-// 1. v5.4: 扁平化JSON格式减少30-40% token消耗
-// 2. v5.4: 长剧本（2000字以上）自动分场景处理，避免截断
-// 3. v5.4: 根据模型限制自动调整maxTokens
-// 4. 支持嵌套格式和扁平格式自动兼容
+// 1. 新的system prompt让AI输出电影级专业提示词
+// 2. 新的JSON结构包含visual_prompt/action_prompt/emotion_cue等结构化字段
+// 3. 注入角色圣经确保跨镜头一致性
 
-// ==================== 新的提示词模板 (v5.4) ====================
+// ==================== 新的提示词模板 (v5.3) ====================
 
 /**
- * v5.4 专业分镜系统提示词
+ * v5.3 专业分镜系统提示词
  * 对标行业顶级工具的提示词质量
  */
 const STORYBOARD_SYSTEM_PROMPT = `你是一位资深的漫剧分镜师，擅长将文学剧本转化为专业的电影级分镜脚本。
@@ -522,6 +487,14 @@ const STORYBOARD_SYSTEM_PROMPT = `你是一位资深的漫剧分镜师，擅长�
 - 色彩必须精确到hex值和占比
 - 构图必须指明具体法则（三分法/对角线/对称/引导线等）
 - 角色用@引用标记，确保跨镜头一致性
+
+【严禁模板化输出】
+- 相邻镜头的光影、色彩、构图必须不同！禁止所有镜头用相同的光影/色彩/构图
+- 每个镜头必须根据该镜头的具体剧情和情绪设计独特的视觉方案
+- 对话镜头：说话者和听者的光影角度不同，构图位置不同
+- 动作镜头：快节奏→高对比冷色调，慢节奏→低对比暖色调
+- 情绪镜头：焦虑→倾斜构图+冷蓝调，喜悦→对称构图+暖黄调
+- 如果发现自己在重复使用相同的光影/色彩/构图描述，必须修改
 
 镜头节奏规则：
 - 环境交代：远景→全景→中景（缓慢推进），2-3个镜头
@@ -548,7 +521,7 @@ const STORYBOARD_USER_TEMPLATE = `请将以下剧本拆分为结构化JSON。
 【剧本原文】
 {{content}}
 
-【输出格式-扁平化JSON（节省token）】
+【输出格式】
 {
   "scenes": [
     {
@@ -562,21 +535,34 @@ const STORYBOARD_USER_TEMPLATE = `请将以下剧本拆分为结构化JSON。
       "shots": [
         {
           "shot_number": 1,
-          "shot_type": "远景/全景/中景/近景/特写",
-          "camera_angle": "平视/俯视/仰视",
-          "camera_movement": "固定/推/拉/移/摇/跟",
+          "shot_type": "远景/全景/中景/近景/特写/大特写",
+          "camera_angle": "平视/俯视/仰视/侧视",
+          "camera_movement": "固定/推镜头/拉镜头/移镜头/摇镜头/跟镜头/环绕",
           "duration": 3,
-          "lighting": "光影描述（含色温如3200K）",
-          "color_palette": "#HEX主色 #HEX辅色",
-          "character_placement": "@角色名 位置",
-          "facial_detail": "面部表情",
-          "scene_description": "环境描述",
-          "composition": "三分法/对角线/对称",
-          "physical_action": "物理级动作描述",
-          "emotion": "主要情绪",
-          "dialogue": "台词（无则空）",
+          
+          "visual_prompt": {
+            "lighting": "光影描述（含色温如3200K）和光位",
+            "color_palette": "主色XX% #HEX，辅色XX% #HEX，点缀色XX% #HEX",
+            "character_placement": "@角色名 位置和朝向",
+            "facial_detail": "具体面部表情细节",
+            "scene_description": "环境细节描述",
+            "composition": "构图法则（三分法/对角线/对称/引导线等）"
+          },
+          
+          "action_prompt": {
+            "physical_action": "物理级动作描述（精确到关节运动）",
+            "micro_movement": "微动作细节"
+          },
+          
+          "emotion_cue": {
+            "primary_emotion": "主要情绪",
+            "visual_mapping": "视觉映射方案"
+          },
+          
+          "dialogue": "该镜头台词（无则空字符串）",
           "narration": "旁白（如有）",
-          "original_text": "对应原文"
+          "scene_reference": "@场景名",
+          "original_text": "对应原文片段"
         }
       ]
     }
@@ -585,12 +571,14 @@ const STORYBOARD_USER_TEMPLATE = `请将以下剧本拆分为结构化JSON。
 
 【强制约束】
 - 每个场景至少3个镜头，对话场景每句台词占一个镜头
-- 景别必须有变化
-- lighting必须写具体如"黄昏侧逆光3200K金色"
-- color_palette必须包含hex如"#E8913A"
-- composition必须指明如"三分法右交叉点"
-- physical_action必须物理级如"手指攥紧衣角指节发白"
-- 角色用@标记如@林川、@苏晚`;
+- 景别必须有变化，不要全是特写或全是远景
+- lighting每个镜头必须不同！根据剧情写：如"逆光剪影4500K" "顶光压迫感5500K" "侧逆光暖橙3200K"
+- color_palette每个镜头必须不同！如紧张用"#2C3E50 #E74C3C" 悲伤用"#34495E #5DADE2" 温暖用"#F39C12 #E74C3C"
+- composition每个镜头必须不同！交替使用：三分法左交叉点/对角线/中心对称/引导线/黄金螺旋
+- action_prompt必须是物理级描述，如"修长的手指缓慢攥紧衣角，指节发白"
+- 角色必须用@引用标记，如@林川、@苏晚
+- 场景用@引用标记，如@废弃车站
+- 禁止所有镜头用相同的lighting/color_palette/composition，违者视为严重错误`;
 
 // ==================== 摄影预设映射表 ====================
 
@@ -880,7 +868,7 @@ function normalizeStoryboard(data) {
                 shot.camera_movement = fallbackMovements[i % fallbackMovements.length];
             }
             
-            // 摄影角度标准化
+            // 摄影角度标准化 (v5.3新增)
             if (!validCameraAngles.has(shot.camera_angle)) {
                 shot.camera_angle = fallbackCameraAngles[i % fallbackCameraAngles.length];
             }
@@ -891,80 +879,61 @@ function normalizeStoryboard(data) {
             shot.narration = String(shot.narration || '').trim();
             shot.scene_reference = String(shot.scene_reference || '').trim();
             
-            // v5.4: 统一处理扁平格式和嵌套格式
-            // 扁平格式字段：lighting, color_palette, character_placement, facial_detail, scene_description, composition, physical_action, emotion
-            // 嵌套格式字段：visual_prompt{}, action_prompt{}, emotion_cue{}
-            
-            var lighting = '', color_palette = '', character_placement = '', facial_detail = '', scene_description = '', composition = '';
-            var physical_action = '', micro_movement = '';
-            var primary_emotion = '', visual_mapping = '';
-            
-            // 检测是否为扁平格式
-            if (shot.lighting !== undefined || shot.color_palette !== undefined || shot.scene_description !== undefined) {
-                // 扁平格式 v5.4
-                lighting = String(shot.lighting || '').trim();
-                color_palette = String(shot.color_palette || '').trim();
-                character_placement = String(shot.character_placement || '').trim();
-                facial_detail = String(shot.facial_detail || '').trim();
-                scene_description = String(shot.scene_description || '').trim();
-                composition = String(shot.composition || '').trim();
-                physical_action = String(shot.physical_action || '').trim();
-                micro_movement = String(shot.micro_movement || '').trim();
-                primary_emotion = String(shot.emotion || shot.primary_emotion || '').trim();
-                visual_mapping = String(shot.visual_mapping || '').trim();
-            } else if (typeof shot.visual_prompt === 'object' && shot.visual_prompt !== null) {
-                // 嵌套格式兼容
-                lighting = String(shot.visual_prompt.lighting || '').trim();
-                color_palette = String(shot.visual_prompt.color_palette || '').trim();
-                character_placement = String(shot.visual_prompt.character_placement || '').trim();
-                facial_detail = String(shot.visual_prompt.facial_detail || '').trim();
-                scene_description = String(shot.visual_prompt.scene_description || '').trim();
-                composition = String(shot.visual_prompt.composition || '').trim();
+            // v5.3: 处理visual_prompt结构
+            if (typeof shot.visual_prompt === 'object' && shot.visual_prompt !== null) {
+                // 已经是结构化对象，保持原样
+                shot.visual_prompt = {
+                    lighting: String(shot.visual_prompt.lighting || '').trim(),
+                    color_palette: String(shot.visual_prompt.color_palette || '').trim(),
+                    character_placement: String(shot.visual_prompt.character_placement || '').trim(),
+                    facial_detail: String(shot.visual_prompt.facial_detail || '').trim(),
+                    scene_description: String(shot.visual_prompt.scene_description || '').trim(),
+                    composition: String(shot.visual_prompt.composition || '').trim()
+                };
             } else {
-                // 旧字符串格式兼容
+                // 旧格式兼容：将字符串转为结构化对象
                 var oldPrompt = String(shot.visual_prompt || shot.visual_description || '').trim();
-                scene_description = oldPrompt;
-                lighting = oldPrompt;
+                shot.visual_prompt = {
+                    lighting: oldPrompt || '',
+                    color_palette: '',
+                    character_placement: '',
+                    facial_detail: '',
+                    scene_description: oldPrompt,
+                    composition: ''
+                };
             }
             
-            // 处理action_prompt
+            // v5.3: 处理action_prompt结构
             if (typeof shot.action_prompt === 'object' && shot.action_prompt !== null) {
-                physical_action = String(shot.action_prompt.physical_action || '').trim();
-                micro_movement = String(shot.action_prompt.micro_movement || '').trim();
-            } else if (!physical_action) {
+                shot.action_prompt = {
+                    physical_action: String(shot.action_prompt.physical_action || '').trim(),
+                    micro_movement: String(shot.action_prompt.micro_movement || '').trim()
+                };
+            } else {
+                // 旧格式兼容
                 var oldAction = String(shot.action_prompt || shot.action_description || '').trim();
-                physical_action = oldAction;
+                shot.action_prompt = {
+                    physical_action: oldAction,
+                    micro_movement: ''
+                };
             }
             
-            // 处理emotion_cue
+            // v5.3: 处理emotion_cue结构
             if (typeof shot.emotion_cue === 'object' && shot.emotion_cue !== null) {
-                primary_emotion = String(shot.emotion_cue.primary_emotion || '').trim();
-                visual_mapping = String(shot.emotion_cue.visual_mapping || '').trim();
+                shot.emotion_cue = {
+                    primary_emotion: String(shot.emotion_cue.primary_emotion || '').trim(),
+                    visual_mapping: String(shot.emotion_cue.visual_mapping || '').trim()
+                };
+            } else {
+                shot.emotion_cue = {
+                    primary_emotion: '',
+                    visual_mapping: ''
+                };
             }
-            
-            // 构建结构化的prompt对象（用于数据库存储和前端展示）
-            shot.visual_prompt = {
-                lighting: lighting,
-                color_palette: color_palette,
-                character_placement: character_placement,
-                facial_detail: facial_detail,
-                scene_description: scene_description,
-                composition: composition
-            };
-            
-            shot.action_prompt = {
-                physical_action: physical_action,
-                micro_movement: micro_movement
-            };
-            
-            shot.emotion_cue = {
-                primary_emotion: primary_emotion,
-                visual_mapping: visual_mapping
-            };
             
             // 为兼容前端，生成综合description
-            shot.description = scene_description || lighting || '';
-            shot.action_description = physical_action;
+            shot.description = shot.visual_prompt.scene_description || shot.visual_prompt.lighting || '';
+            shot.action_description = shot.action_prompt.physical_action;
         }
     }
     
@@ -1004,7 +973,7 @@ function compilePromptsForStoryboard(data, characters) {
 // ==================== 主函数 ====================
 
 /**
- * 从剧本生成分镜（v5.4 增强版）
+ * 从剧本生成分镜（v5.3 增强版）
  * @param {Object} params - 包含title, content, character_bible
  */
 async function generateStoryboardFromScript(params) {
@@ -1023,27 +992,6 @@ async function generateStoryboardFromScript(params) {
         throw new Error('未配置可用的大模型接口。请在 backend/.env 按 backend/.env.example 添加：AI_PROVIDER=openai-compatible、AI_API_KEY、AI_BASE_URL、AI_MODEL（推荐），然后重试上传。');
     }
     
-    // v5.4: 根据剧本字数决定处理策略
-    // flashx 4096 tokens 硬限制，即使扁平格式1200字剧本也会超
-    // 500字以下走单次调用，500字以上按场景分段处理（每次只输出一小段）
-    var contentLength = scriptContent.length;
-    console.log('[AI Service] 剧本字数:', contentLength);
-    
-    if (contentLength < 500) {
-        return await generateStoryboardSingle(params, provider);
-    } else {
-        return await generateStoryboardByScene(params, provider);
-    }
-}
-
-/**
- * 单次调用生成分镜（适用于短剧本）
- */
-async function generateStoryboardSingle(params, provider) {
-    var scriptTitle = String(params.title || '').trim();
-    var scriptContent = String(params.content || '').trim();
-    var characterBible = params.character_bible || '';
-    
     var systemPrompt = STORYBOARD_SYSTEM_PROMPT;
     var userPrompt = interpolateTemplate(STORYBOARD_USER_TEMPLATE, {
         title: scriptTitle || '未命名剧本',
@@ -1057,7 +1005,7 @@ async function generateStoryboardSingle(params, provider) {
             system: systemPrompt,
             user: userPrompt,
             temperature: 0.2,
-            maxTokens: 4096,
+            maxTokens: 16000,
             enableRetry: true
         });
     } catch (e) {
@@ -1082,145 +1030,6 @@ async function generateStoryboardSingle(params, provider) {
         provider: provider,
         model: result.model,
         usage: result.usage,
-        data: compiled
-    };
-}
-
-/**
- * 按场景分段生成分镜（适用于长剧本 v5.4）
- * 策略：先让AI识别场景分割点，然后对每个场景单独拆分镜头
- */
-async function generateStoryboardByScene(params, provider) {
-    var scriptTitle = String(params.title || '').trim();
-    var scriptContent = String(params.content || '').trim();
-    var characterBible = params.character_bible || '';
-    
-    console.log('[AI Service] 启用长剧本分场景处理，字数:', scriptContent.length);
-    
-    // Step 1: 先让AI识别场景分割点
-    var sceneSplitPrompt = `请分析以下剧本，识别场景分割点。
-
-【剧本标题】
-${scriptTitle}
-
-【剧本原文】
-${scriptContent}
-
-请直接输出JSON格式的场景分割结果：
-{
-  "scenes": [
-    {
-      "scene_number": 1,
-      "title": "场景名称",
-      "location": "地点",
-      "time_of_day": "日内/夜内/日外/夜外",
-      "characters": ["角色1", "角色2"],
-      "start_line": 1,
-      "content": "该场景的剧本原文"
-    }
-  ]
-}
-
-规则：
-- 每个场景至少50字
-- 场景切换标志：地点变化、时间变化、重要角色入场/退场
-- 必须输出所有场景，不要遗漏`;
-
-    var sceneSplitResult;
-    try {
-        sceneSplitResult = await generateTextWithProvider(provider, {
-            system: '你是一位专业的剧本场景分析专家。',
-            user: sceneSplitPrompt,
-            temperature: 0.2,
-            maxTokens: 4096,
-            enableRetry: true
-        });
-    } catch (e) {
-        console.error('[AI Service] 场景分割失败:', e.message);
-        throw new Error('场景分割失败: ' + e.message);
-    }
-    
-    var sceneJsonText = extractFirstJsonObject(sceneSplitResult.content);
-    var sceneData;
-    try {
-        sceneData = JSON.parse(sceneJsonText);
-    } catch (e) {
-        console.error('[AI Service] 场景分割JSON解析失败，原始内容:', sceneJsonText.slice(0, 300));
-        throw new Error('场景分割JSON解析失败');
-    }
-    
-    if (!sceneData.scenes || !Array.isArray(sceneData.scenes)) {
-        throw new Error('场景分割结果格式错误');
-    }
-    
-    console.log('[AI Service] 场景分割完成，场景数:', sceneData.scenes.length);
-    
-    // Step 2: 对每个场景单独拆分镜头
-    var allScenes = [];
-    var globalShotNumber = 0;
-    
-    for (var si = 0; si < sceneData.scenes.length; si++) {
-        var sceneInfo = sceneData.scenes[si];
-        console.log('[AI Service] 处理场景', si + 1, ':', sceneInfo.title);
-        
-        // 对每个场景生成镜头
-        var sceneUserPrompt = interpolateTemplate(STORYBOARD_USER_TEMPLATE, {
-            title: scriptTitle + ' - ' + sceneInfo.title,
-            content: sceneInfo.content,
-            character_bible: characterBible || '（暂无角色信息）'
-        });
-        
-        var sceneResult;
-        try {
-            sceneResult = await generateTextWithProvider(provider, {
-                system: STORYBOARD_SYSTEM_PROMPT,
-                user: sceneUserPrompt,
-                temperature: 0.2,
-                maxTokens: 4096,
-                enableRetry: true
-            });
-        } catch (e) {
-            console.error('[AI Service] 场景镜头拆分失败:', e.message);
-            // 单个场景失败，继续处理其他场景
-            sceneResult = { content: '{"scenes":[{"scene_number":"' + sceneInfo.scene_number + '","title":"' + sceneInfo.title + '","location":"' + sceneInfo.location + '","time_of_day":"' + sceneInfo.time_of_day + '","characters":' + JSON.stringify(sceneInfo.characters || []) + ',"content":"' + sceneInfo.content + '","shots":[]}]}' };
-        }
-        
-        var sceneJsonText = extractFirstJsonObject(sceneResult.content);
-        try {
-            var sceneShotsData = JSON.parse(sceneJsonText);
-            if (sceneShotsData.scenes && sceneShotsData.scenes[0] && sceneShotsData.scenes[0].shots) {
-                // 重排镜头编号
-                for (var j = 0; j < sceneShotsData.scenes[0].shots.length; j++) {
-                    globalShotNumber++;
-                    sceneShotsData.scenes[0].shots[j].shot_number = globalShotNumber;
-                }
-                allScenes.push(sceneShotsData.scenes[0]);
-            } else {
-                // 解析异常，创建空场景
-                sceneInfo.shots = [];
-                allScenes.push(sceneInfo);
-            }
-        } catch (e) {
-            console.error('[AI Service] 场景镜头JSON解析失败:', e.message);
-            sceneInfo.shots = [];
-            allScenes.push(sceneInfo);
-        }
-    }
-    
-    // Step 3: 合并所有场景
-    var mergedData = { scenes: allScenes };
-    var normalized = normalizeStoryboard(mergedData);
-    var compiled = compilePromptsForStoryboard(normalized);
-    
-    if (!compiled.scenes.length) {
-        throw new Error('分镜拆分失败：未返回任何有效场景');
-    }
-    
-    return {
-        success: true,
-        provider: provider,
-        model: sceneSplitResult.model,
-        usage: sceneSplitResult.usage,
         data: compiled
     };
 }
