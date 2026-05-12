@@ -1609,19 +1609,7 @@
             变体管理
           </el-button>
         </div>
-        <!-- 多视角生成按钮 -->
-        <div class="multi-view-actions">
-          <span class="view-actions-label">多视角生成:</span>
-          <el-button size="small" type="primary" :loading="generatingCharView[selectedCharacter.id + '_front']" :disabled="!selectedCharacter.visual_prompt_en && !selectedCharacter.identity_anchors" @click="handleGenerateCharView(selectedCharacter, 'front')">
-            正面
-          </el-button>
-          <el-button size="small" type="success" :loading="generatingCharView[selectedCharacter.id + '_side']" :disabled="!selectedCharacter.visual_prompt_en && !selectedCharacter.identity_anchors" @click="handleGenerateCharView(selectedCharacter, 'side')">
-            侧面
-          </el-button>
-          <el-button size="small" type="warning" :loading="generatingCharView[selectedCharacter.id + '_back']" :disabled="!selectedCharacter.visual_prompt_en && !selectedCharacter.identity_anchors" @click="handleGenerateCharView(selectedCharacter, 'back')">
-            背面
-          </el-button>
-        </div>
+        <!-- 多视角生成已合并到"AI生成三视图"按钮，无需单独生成 -->
         <!-- 6层锚点展示 -->
         <div v-if="selectedCharacter.identity_anchors" class="anchors-display">
           <h5>6层身份锚点</h5>
