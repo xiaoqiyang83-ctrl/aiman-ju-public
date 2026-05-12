@@ -355,6 +355,9 @@
                   <el-icon><Select /></el-icon>
                   批量选择
                 </el-button>
+                <el-select v-model="shotImageSize" size="small" style="width: 120px;">
+                  <el-option v-for="(item, key) in IMAGE_SIZE_MAP" :key="key" :label="item.label" :value="key" />
+                </el-select>
                 <el-button type="success" :loading="batchGenerating" :disabled="batchGenerating" @click="handleBatchGenerateImages">
                   <el-icon><Picture /></el-icon>
                   <span v-if="batchGenerating">生图中 {{ batchProgress.current }}/{{ batchProgress.total }}</span>
@@ -447,7 +450,10 @@
                               CogVideo
                             </el-button>
                           </template>
-                          <el-button 
+                          <el-select v-model="shotImageSize" size="small" style="width: 100px;">
+                            <el-option v-for="(item, key) in IMAGE_SIZE_MAP" :key="key" :label="item.label" :value="key" />
+                          </el-select>
+                          <el-button
                             size="small" 
                             type="success"
                             :loading="generatingShotImage[shot.id]"
@@ -2071,6 +2077,17 @@ const generatingCharView = reactive({})
 const calibratingCharacter = reactive({})
 const cogVideoTaskIds = ref({})
 const cogVideoTaskTimers = ref({})
+
+// 生图尺寸选择（语义化key）
+const shotImageSize = ref('landscape_16_9')
+const IMAGE_SIZE_MAP = {
+  square_1_1: { label: '正方形 1:1', value: '1024x1024' },
+  landscape_16_9: { label: '横屏 16:9', value: '1344x768' },
+  landscape_4_3: { label: '横屏 4:3', value: '1152x864' },
+  landscape_2_1: { label: '横屏 2:1', value: '1440x720' },
+  portrait_9_16: { label: '竖屏 9:16', value: '768x1344' },
+  portrait_3_4: { label: '竖屏 3:4', value: '864x1152' },
+}
 const isEditingCharacter = ref(false)
 const currentEditingCharacter = ref(null)
 const charForm = reactive({
@@ -3058,7 +3075,7 @@ const handleGenShotImage = async (shot) => {
     // 视觉连续性：检查上一镜头是否有图片
     const visualContinuityPrompt = await getVisualContinuityPrompt(shot)
     
-    const response = await imagesAPI.generateShot(shot.id, { visualContinuityPrompt })
+    const response = await imagesAPI.generateShot(shot.id, { visualContinuityPrompt, size: IMAGE_SIZE_MAP[shotImageSize.value]?.value || '1344x768' })
     if (response.success && response.imageUrl) {
       ElMessage.success('分镜图片生成成功！')
       // 更新镜头数据
@@ -3312,7 +3329,7 @@ const handleBatchGenerateImages = async () => {
       // 获取视觉连续性提示词
       const visualContinuityPrompt = await getVisualContinuityPrompt(shot)
       
-      const response = await imagesAPI.generateShot(shot.id, { visualContinuityPrompt })
+      const response = await imagesAPI.generateShot(shot.id, { visualContinuityPrompt, size: IMAGE_SIZE_MAP[shotImageSize.value]?.value || '1344x768' })
       if (response.success && response.imageUrl) {
         shot.scene_image_url = response.imageUrl
         const shotIndex = scene.shots.findIndex(s => s.id === shot.id)
@@ -6717,4 +6734,3 @@ const handleMoveShot = async (scene, shot, direction) => {
   margin-bottom: 16px;
 }
 
-const shotImageSize = ref('1344x768') // 生图尺寸，默认16:9横版
