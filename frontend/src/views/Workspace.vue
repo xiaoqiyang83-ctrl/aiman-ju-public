@@ -429,8 +429,8 @@
                     >
                       <!-- 缩略图区域 -->
                       <div class="shot-thumb-enhanced">
-                        <img v-if="shot.thumbnail || shot.video_url || shot.result_url" :src="getAssetUrl(shot.thumbnail || shot.video_url || shot.result_url)" alt="" />
-                        <img v-else-if="shot.scene_image_url" :src="getAssetUrl(shot.scene_image_url)" alt="场景参考图" class="shot-ref-image-thumb" />
+                        <el-image v-if="shot.thumbnail || shot.video_url || shot.result_url" :src="getAssetUrl(shot.thumbnail || shot.video_url || shot.result_url)" fit="cover" :preview-src-list="[getAssetUrl(shot.thumbnail || shot.video_url || shot.result_url)]" preview-teleported class="shot-preview-image" />
+                        <el-image v-else-if="shot.scene_image_url" :src="getAssetUrl(shot.scene_image_url)" fit="cover" :preview-src-list="[getAssetUrl(shot.scene_image_url)]" preview-teleported alt="场景参考图" class="shot-ref-image-thumb shot-preview-image" />
                         <div v-else class="thumb-placeholder-enhanced">
                           <el-icon :size="32"><VideoPlay /></el-icon>
                           <span>暂无预览</span>
@@ -5587,7 +5587,14 @@ const handleMoveShot = async (scene, shot, direction) => {
   overflow: hidden;
 }
 
-.shot-thumb-enhanced img {
+.shot-thumb-enhanced img,
+.shot-thumb-enhanced .shot-preview-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  cursor: zoom-in;
+}
+.shot-thumb-enhanced .shot-preview-image :deep(.el-image__inner) {
   width: 100%;
   height: 100%;
   object-fit: cover;
