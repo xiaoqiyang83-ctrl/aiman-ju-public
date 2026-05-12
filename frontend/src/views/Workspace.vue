@@ -3166,12 +3166,16 @@ const handleGenerateCogVideo = async (shot) => {
 }
 
 // 轮询CogVideoX视频任务状态
+const MAX_POLL_COUNT = 80 // 最多轮询80次（5秒*80=约6分40秒）
+const pollCogVideoCountMap = {} // 记录每个shotId的轮询次数
 const pollCogVideoStatus = async (shotId) => {
   const taskId = cogVideoTaskIds.value[shotId]
   if (!taskId) {
     console.error('未找到taskId:', shotId)
     return
   }
+  
+  pollCogVideoCountMap[shotId] = 0
   
   // 设置轮询定时器
   if (cogVideoTaskTimers.value[shotId]) {
@@ -3180,6 +3184,23 @@ const pollCogVideoStatus = async (shotId) => {
   
   cogVideoTaskTimers.value[shotId] = setInterval(async () => {
     try {
+      pollCogVideoCountMap[shotId] = (pollCogVideoCountMap[shotId] || 0) + 1
+      
+      // 超过最大轮询次数，停止轮询
+      if (pollCogVideoCountMap[shotId] > MAX_POLL_COUNT) {
+        clearInterval(cogVideoTaskTimers.value[shotId])
+        delete cogVideoTaskTimers.value[shotId]
+        delete cogVideoTaskIds.value[shotId]
+        delete pollCogVideoCountMap[shotId]
+        const scene = scenes.value.find(s => s.shots?.some(shot => shot.id === shotId))
+        if (scene) {
+          const shot = scene.shots.find(s => s.id === shotId)
+          if (shot) shot.video_status = 'failed'
+        }
+        ElMessage.error('视频生成超时（超过6分钟），请重试')
+        return
+      }
+      
       const res = await videosAPI.getTaskStatus(taskId)
       
       if (res.success) {
@@ -3196,6 +3217,7 @@ const pollCogVideoStatus = async (shotId) => {
               clearInterval(cogVideoTaskTimers.value[shotId])
               delete cogVideoTaskTimers.value[shotId]
               delete cogVideoTaskIds.value[shotId]
+              delete pollCogVideoCountMap[shotId]
               ElMessage.success('CogVideoX视频生成完成！')
               await loadShots() // 刷新列表
             } else if (res.status === 'failed') {
@@ -3204,11 +3226,12 @@ const pollCogVideoStatus = async (shotId) => {
               clearInterval(cogVideoTaskTimers.value[shotId])
               delete cogVideoTaskTimers.value[shotId]
               delete cogVideoTaskIds.value[shotId]
+              delete pollCogVideoCountMap[shotId]
               ElMessage.error('视频生成失败: ' + (res.error || '未知错误'))
             } else {
               // 仍在处理中
               shot.video_status = 'processing'
-              console.log('CogVideoX任务进行中:', taskId)
+              console.log('CogVideoX任务进行中:', taskId, '第' + pollCogVideoCountMap[shotId] + '次查询')
             }
           }
         }

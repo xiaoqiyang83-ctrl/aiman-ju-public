@@ -48,6 +48,10 @@ const DEFAULT_DURATION = 5; // 秒
 const POLL_INTERVAL_MS = 3000; // 3秒轮询一次
 const MAX_POLL_COUNT = 60; // 最多轮询60次（约3分钟）
 
+// 404计数器：记录每个taskId连续404的次数
+const notFoundCountMap = new Map();
+const MAX_404_COUNT = 40; // 连续404超过40次（约200秒）判定为任务丢失
+
 /**
  * 下载文件到本地
  * @param {string} url - 文件URL
@@ -182,7 +186,7 @@ async function generateVideo({ prompt, imageUrl, model = DEFAULT_MODEL, size = D
 async function getVideoTaskStatus(taskId) {
   console.log('[VideoGenerateService] 查询任务状态: ' + taskId);
 
-  const response = await fetch(ZHIPU_BASE_URL + '/videos/generations/' + taskId, {
+  const response = await fetch(ZHIPU_BASE_URL + '/async-result/' + taskId, {
     method: 'GET',
     headers: {
       'Authorization': 'Bearer ' + ZHIPU_API_KEY
@@ -191,31 +195,43 @@ async function getVideoTaskStatus(taskId) {
 
   if (!response.ok) {
     const errorText = await response.text();
-    // 404表示任务刚提交还没入库，返回processing而不是报错
+    // 404表示任务刚提交还没入库，计数后返回processing
     if (response.status === 404) {
-      console.log('[VideoGenerateService] 任务尚未入库(404)，继续等待...');
+      const count = (notFoundCountMap.get(taskId) || 0) + 1;
+      notFoundCountMap.set(taskId, count);
+      if (count >= MAX_404_COUNT) {
+        notFoundCountMap.delete(taskId);
+        console.log('[VideoGenerateService] 任务连续404超过' + MAX_404_COUNT + '次，判定为任务丢失: ' + taskId);
+        return { status: 'failed', error: '视频任务丢失（API长时间未入库），请重试' };
+      }
+      console.log('[VideoGenerateService] 任务尚未入库(404)，第' + count + '次，继续等待...');
       return { status: 'processing' };
     }
+    // 非404错误，清除404计数
+    notFoundCountMap.delete(taskId);
     throw new Error('查询任务状态失败: ' + response.status + ' - ' + errorText);
   }
 
   const result = await response.json();
+
+  // 任务已有记录，清除404计数
+  notFoundCountMap.delete(taskId);
 
   const status = result.task_status?.toUpperCase();
   const videoResult = result.video_result?.[0];
 
   console.log('[VideoGenerateService] 任务状态: ' + status);
 
-  if (status === 'COMPLETED' && videoResult) {
+  if ((status === 'COMPLETED' || status === 'SUCCESS') && videoResult) {
     return {
       status: 'completed',
       videoUrl: videoResult.url,
       coverImageUrl: videoResult.cover_image_url
     };
-  } else if (status === 'FAILED') {
+  } else if (status === 'FAILED' || status === 'FAIL') {
     return {
       status: 'failed',
-      error: result.fail_reason || '视频生成失败'
+      error: result.fail_reason || result.error || '视频生成失败'
     };
   } else {
     return { status: 'processing' };
