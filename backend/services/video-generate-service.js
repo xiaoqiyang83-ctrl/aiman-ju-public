@@ -137,7 +137,8 @@ async function generateVideo({ prompt, imageUrl, model = DEFAULT_MODEL, size = D
   console.log('[VideoGenerateService] With Audio: ' + withAudio);
   console.log('[VideoGenerateService] Prompt: ' + prompt.substring(0, 200) + '...');
   if (imageUrl) {
-    console.log('[VideoGenerateService] Image URL: ' + imageUrl);
+    const urlPreview = imageUrl.startsWith('data:') ? 'base64(' + (imageUrl.length / 1024).toFixed(1) + 'KB)' : imageUrl;
+    console.log('[VideoGenerateService] Image URL: ' + urlPreview);
   }
 
   // 429重试逻辑
