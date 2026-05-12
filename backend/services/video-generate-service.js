@@ -193,9 +193,12 @@ async function getVideoTaskStatus(taskId) {
     }
   });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    // 404表示任务刚提交还没入库，计数后返回processing
+  const responseText = await response.text();
+  let result;
+  try {
+    result = JSON.parse(responseText);
+  } catch (e) {
+    // 无法解析为JSON
     if (response.status === 404) {
       const count = (notFoundCountMap.get(taskId) || 0) + 1;
       notFoundCountMap.set(taskId, count);
@@ -207,14 +210,44 @@ async function getVideoTaskStatus(taskId) {
       console.log('[VideoGenerateService] 任务尚未入库(404)，第' + count + '次，继续等待...');
       return { status: 'processing' };
     }
-    // 非404错误，清除404计数
     notFoundCountMap.delete(taskId);
-    throw new Error('查询任务状态失败: ' + response.status + ' - ' + errorText);
+    throw new Error('查询任务状态失败: ' + response.status + ' - ' + responseText);
   }
 
-  const result = await response.json();
+  // 如果响应体包含task_status，按状态处理（即使HTTP状态码非200）
+  const taskStatus = result.task_status?.toUpperCase();
+  if (taskStatus) {
+    notFoundCountMap.delete(taskId);
+    if ((taskStatus === 'COMPLETED' || taskStatus === 'SUCCESS') && result.video_result?.[0]) {
+      const videoResult = result.video_result[0];
+      return {
+        status: 'completed',
+        videoUrl: videoResult.url,
+        coverImageUrl: videoResult.cover_image_url
+      };
+    } else if (taskStatus === 'FAILED' || taskStatus === 'FAIL') {
+      const errMsg = result.error?.message || result.fail_reason || result.error || '视频生成失败';
+      return { status: 'failed', error: errMsg };
+    }
+    return { status: 'processing' };
+  }
 
-  // 任务已有记录，清除404计数
+  // 没有task_status的非200响应
+  if (!response.ok) {
+    if (response.status === 404) {
+      const count = (notFoundCountMap.get(taskId) || 0) + 1;
+      notFoundCountMap.set(taskId, count);
+      if (count >= MAX_404_COUNT) {
+        notFoundCountMap.delete(taskId);
+        return { status: 'failed', error: '视频任务丢失（API长时间未入库），请重试' };
+      }
+      return { status: 'processing' };
+    }
+    notFoundCountMap.delete(taskId);
+    throw new Error('查询任务状态失败: ' + response.status + ' - ' + responseText);
+  }
+
+  // 正常200响应，解析状态
   notFoundCountMap.delete(taskId);
 
   const status = result.task_status?.toUpperCase();
@@ -231,7 +264,7 @@ async function getVideoTaskStatus(taskId) {
   } else if (status === 'FAILED' || status === 'FAIL') {
     return {
       status: 'failed',
-      error: result.fail_reason || result.error || '视频生成失败'
+      error: result.error?.message || result.fail_reason || result.error || '视频生成失败'
     };
   } else {
     return { status: 'processing' };
@@ -304,17 +337,23 @@ async function generateShotVideo(shotId, options = {}) {
     throw new Error('镜头没有视频提示词');
   }
 
-  // 获取场景信息（用于获取完整URL）
-  const sceneResult = await pool.query(
-    'SELECT s.* FROM scenes s WHERE s.id = $1',
-    [shot.scene_id]
-  );
-
-  let fullImageUrl = imageUrl;
-  if (!imageUrl.startsWith('http')) {
-    // 补全为完整URL
-    const baseUrl = process.env.BASE_URL || 'http://localhost:3001';
-    fullImageUrl = baseUrl + (imageUrl.startsWith('/') ? '' : '/') + imageUrl;
+  // 处理图片URL：如果是本地路径，转为base64；如果是公网URL，直接使用
+  let finalImageUrl = imageUrl;
+  if (!imageUrl.startsWith('http') && !imageUrl.startsWith('data:')) {
+    const localPath = path.join(__dirname, '..' + (imageUrl.startsWith('/') ? imageUrl : '/' + imageUrl));
+    if (fs.existsSync(localPath)) {
+      // 读取本地文件转base64
+      const imageBuffer = fs.readFileSync(localPath);
+      const ext = path.extname(localPath).toLowerCase();
+      const mimeType = ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : 'image/png';
+      finalImageUrl = 'data:' + mimeType + ';base64,' + imageBuffer.toString('base64');
+      console.log('[VideoGenerateService] 本地图片已转为base64, 大小: ' + (imageBuffer.length / 1024).toFixed(1) + 'KB');
+    } else {
+      // 文件不存在，尝试用公网URL
+      const baseUrl = process.env.BASE_URL || 'http://localhost:3001';
+      finalImageUrl = baseUrl + (imageUrl.startsWith('/') ? '' : '/') + imageUrl;
+      console.log('[VideoGenerateService] 本地文件不存在，使用URL: ' + finalImageUrl);
+    }
   }
 
   const { model = DEFAULT_MODEL, withAudio = true } = options;
@@ -322,7 +361,7 @@ async function generateShotVideo(shotId, options = {}) {
   // 提交视频生成任务
   const { taskId } = await generateVideo({
     prompt: prompt,
-    imageUrl: fullImageUrl,
+    imageUrl: finalImageUrl,
     model: model,
     withAudio: withAudio
   });
