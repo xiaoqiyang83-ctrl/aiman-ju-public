@@ -2031,13 +2031,6 @@ watch(() => props.activeTab, (newTab) => {
   }
 })
 
-// 监听角色详情弹窗关闭，清空选中角色
-watch(showCharacterDetail, (val) => {
-  if (!val) {
-    selectedCharacter.value = null
-  }
-})
-
 // ==================== 剧本相关 ====================
 const loadingScripts = ref(false)
 const scriptSearch = ref('')
@@ -2072,6 +2065,13 @@ const characters = ref([])
 const showCharacterDialog = ref(false)
 const showCharacterDetail = ref(false)  // 角色详情弹窗
 const charImageStyle = ref('anime')  // 三视图风格选择
+
+// 监听角色详情弹窗关闭，清空选中角色
+watch(showCharacterDetail, (val) => {
+  if (!val) {
+    selectedCharacter.value = null
+  }
+})
 const creatingCharacter = ref(false)
 const generatingImage = reactive({})
 const generatingShotImage = reactive({})
