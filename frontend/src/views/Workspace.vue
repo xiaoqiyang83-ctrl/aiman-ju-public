@@ -756,6 +756,56 @@
                                   </el-option-group>
                                 </el-select>
                               </el-form-item>
+                              
+                              <!-- 情感风格选择 -->
+                              <el-form-item label="情感风格">
+                                <el-select v-model="ttsForm.emotion" placeholder="选择情感风格（可选）" clearable style="width: 100%">
+                                  <el-option
+                                    v-for="emotion in emotionList"
+                                    :key="emotion.id"
+                                    :label="emotion.name"
+                                    :value="emotion.id"
+                                  >
+                                    <span>{{ emotion.name }}</span>
+                                    <span class="voice-desc">{{ emotion.description }}</span>
+                                  </el-option>
+                                </el-select>
+                              </el-form-item>
+                              
+                              <!-- 参数调节 -->
+                              <div class="tts-params">
+                                <el-form-item label="语速调节">
+                                  <el-slider 
+                                    v-model="ttsForm.rate" 
+                                    :min="'-50%'" 
+                                    :max="'50%'" 
+                                    :step="'10%'"
+                                    show-input
+                                    :format-tooltip="val => val"
+                                  />
+                                </el-form-item>
+                                <el-form-item label="音量调节">
+                                  <el-slider 
+                                    v-model="ttsForm.volume" 
+                                    :min="'-50%'" 
+                                    :max="'50%'" 
+                                    :step="'10%'"
+                                    show-input
+                                    :format-tooltip="val => val"
+                                  />
+                                </el-form-item>
+                                <el-form-item label="音调调节">
+                                  <el-slider 
+                                    v-model="ttsForm.pitch" 
+                                    :min="'-50Hz'" 
+                                    :max="'50Hz'" 
+                                    :step="'10Hz'"
+                                    show-input
+                                    :format-tooltip="val => val"
+                                  />
+                                </el-form-item>
+                              </div>
+                              
                               <el-form-item>
                                 <el-button type="primary" :loading="batchTTSLoading" @click="handleBatchTTS">
                                   <el-icon><Microphone /></el-icon>
@@ -2263,10 +2313,31 @@ const voiceList = ref([])
 const ttsForm = reactive({
   voiceId: '',
   text: '',
-  volume: 1,
-  speed: 1
+  volume: '+0%',     // 音量：-50% ~ +50%
+  rate: '+0%',       // 语速：-50% ~ +50%
+  pitch: '+0Hz',     // 音调：-50Hz ~ +50Hz
+  emotion: ''        // 情感风格
 })
 const ttsLoading = ref(false)
+
+// 情感风格列表
+const emotionList = ref([
+  { id: 'warm', name: '温柔', description: '温和亲切的语气' },
+  { id: 'cheerful', name: '欢快', description: '开心愉悦的语气' },
+  { id: 'playful', name: '俏皮', description: '活泼可爱的语气' },
+  { id: 'lively', name: '活泼', description: '充满活力的语气' },
+  { id: 'calm', name: '平静', description: '冷静沉稳的语气' },
+  { id: 'steady', name: '稳重', description: '成熟稳重的语气' },
+  { id: 'gentle', name: '柔和', description: '柔和温暖的语气' },
+  { id: 'confident', name: '自信', description: '自信大方的语气' },
+  { id: 'relaxed', name: '轻松', description: '轻松自然的语气' },
+  { id: 'innocent', name: '天真', description: '纯真可爱的语气' },
+  { id: 'seductive', name: '磁性', description: '低沉磁性的语气' },
+  { id: 'formal', name: '正式', description: '正式严肃的语气' },
+  { id: 'energetic', name: '有力', description: '充满力量的语气' },
+  { id: 'youthful', name: '青春', description: '青春洋溢的语气' },
+  { id: 'deep', name: '低沉', description: '低沉浑厚的语气' }
+])
 const bgmList = ref([])
 const bgmCategory = ref('')
 const selectedBGM = ref(null)
@@ -2316,7 +2387,11 @@ const handleShotTTS = async (shot) => {
   try {
     const res = await ttsAPI.generate({
       shotId: shot.id,
-      voice: ttsForm.voiceId || 'zh-CN-XiaoxiaoNeural'
+      voice: ttsForm.voiceId || 'zh-CN-XiaoxiaoNeural',
+      volume: ttsForm.volume,
+      rate: ttsForm.rate,
+      pitch: ttsForm.pitch,
+      emotion: ttsForm.emotion
     })
     if (res.success) {
       ElMessage.success('配音生成成功')
@@ -2355,7 +2430,11 @@ const handleBatchTTS = async () => {
   try {
     const res = await ttsAPI.generateBatch({
       scriptId: currentScriptId.value,
-      voice: ttsForm.voiceId || 'zh-CN-XiaoxiaoNeural'
+      voice: ttsForm.voiceId || 'zh-CN-XiaoxiaoNeural',
+      volume: ttsForm.volume,
+      rate: ttsForm.rate,
+      pitch: ttsForm.pitch,
+      emotion: ttsForm.emotion
     })
     if (res.success) {
       ElMessage.success(res.message || `批量生成完成：成功${res.data.success}个，失败${res.data.failed}个`)
@@ -5864,6 +5943,21 @@ const handleMoveShot = async (scene, shot, direction) => {
 
 .tts-form {
   max-width: 600px;
+}
+
+.tts-params {
+  background: #f5f7fa;
+  border-radius: 8px;
+  padding: 8px 16px;
+  margin-bottom: 16px;
+}
+
+.tts-params .el-form-item {
+  margin-bottom: 8px;
+}
+
+.tts-params .el-slider {
+  margin: 0 8px;
 }
 
 .section-toolbar {
