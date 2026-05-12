@@ -488,6 +488,12 @@ const STORYBOARD_SYSTEM_PROMPT = `你是一位资深的漫剧分镜师，擅长�
 - 构图必须指明具体法则（三分法/对角线/对称/引导线等）
 - 角色用@引用标记，确保跨镜头一致性
 
+【场景拆分规则】
+- 剧本中每个场景头（如"2-1 日 内 工厂农场 - 温室"或"3-1 日 外 农场 - 菜地"）对应一个独立的scene对象
+- 严禁将多个场景合并为一个scene！即使场景很短也必须独立存在
+- scene_number必须与剧本场景头编号一致
+- 不同场景的角色、地点、时间可能不同，必须分别列出
+
 【台词完整性要求】
 - 剧本原文中的每一句对话都必须出现在某个镜头的dialogue字段中，一句都不能漏
 - 优先级：台词完整性 > 镜头数量。宁可多加镜头，也不能遗漏台词
@@ -960,6 +966,18 @@ function autoFillDialogue(normalized, dialogueList) {
         }
         
         if (targetScene) {
+            // 从已有镜头复用光影和色调描述
+            var refLighting = '';
+            var refPalette = '';
+            for (var ri = 0; ri < targetScene.shots.length; ri++) {
+                var refShot = targetScene.shots[ri];
+                if (refShot.visual_prompt) {
+                    if (refShot.visual_prompt.lighting && !refLighting) refLighting = refShot.visual_prompt.lighting;
+                    if (refShot.visual_prompt.color_palette && !refPalette) refPalette = refShot.visual_prompt.color_palette;
+                }
+                if (refLighting && refPalette) break;
+            }
+            var sceneDesc = (targetScene.title || '') + '，' + missing.character + '说话';
             // 在该场景末尾追加一个近景镜头
             var newShot = {
                 shot_number: targetScene.shots.length + 1,
@@ -972,12 +990,12 @@ function autoFillDialogue(normalized, dialogueList) {
                 scene_reference: '@' + (targetScene.title || ''),
                 original_text: missing.character + '：' + missing.text,
                 visual_prompt: {
-                    lighting: '',
-                    color_palette: '',
+                    lighting: refLighting || '自然光',
+                    color_palette: refPalette || '',
                     character_placement: '@' + missing.character + ' 画面中央',
                     facial_detail: '',
-                    scene_description: '',
-                    composition: ''
+                    scene_description: sceneDesc,
+                    composition: '居中构图'
                 },
                 action_prompt: {
                     physical_action: '',
