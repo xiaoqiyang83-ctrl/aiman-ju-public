@@ -5591,13 +5591,18 @@ const handleMoveShot = async (scene, shot, direction) => {
 .shot-thumb-enhanced .shot-preview-image {
   width: 100%;
   height: 100%;
-  object-fit: cover;
-  cursor: zoom-in;
+  display: block;
 }
 .shot-thumb-enhanced .shot-preview-image :deep(.el-image__inner) {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  cursor: zoom-in;
+}
+.shot-thumb-enhanced .shot-preview-image :deep(.el-image__error),
+.shot-thumb-enhanced .shot-preview-image :deep(.el-image__placeholder) {
+  width: 100%;
+  height: 100%;
 }
 
 .thumb-placeholder-enhanced {
