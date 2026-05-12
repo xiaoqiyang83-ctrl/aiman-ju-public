@@ -234,38 +234,79 @@ async function generateCharacterImage(characterId, variationId = null, options =
     visualPrompt = customPrompt;
   }
 
-  // 三视图配置
-  const views = [
-    { key: 'front', suffix: 'front view, facing camera, full body', field: 'front_image_url' },
-    { key: 'side', suffix: 'side view, profile, full body', field: 'side_image_url' },
-    { key: 'back', suffix: 'back view, from behind, full body', field: 'back_image_url' }
-  ];
-  
+  // 方案A：生成单张character sheet图，然后裁切为三视图
   const results = {};
   const timestamp = Date.now();
   
-  // 依次生成三视图（不并行，避免API限流）
-  for (const view of views) {
-    try {
-      console.log(`[ImageService] 开始生成${view.key}视图...`);
-      
-      const viewPrompt = `${visualPrompt}, ${view.suffix}, anime style, flat color, clean lines, white background, masterpiece, best quality`;
-      
-      // 生成图片
-      const result = await generateImage({ prompt: viewPrompt });
-      
-      // 下载到本地
-      const filename = `char-${characterId}-${view.key}-${variationId || 'base'}-${timestamp}.png`;
-      const localPath = path.join(__dirname, '../uploads/images', filename);
-      const relativePath = '/uploads/images/' + filename;
-      
-      await downloadImage(result.url, localPath);
-      
-      results[view.key] = relativePath;
-      console.log(`[ImageService] ${view.key}视图生成成功: ${relativePath}`);
-      
-    } catch (err) {
-      console.error(`[ImageService] 生成${view.key}视图失败:`, err.message);
+  try {
+    console.log('[ImageService] 开始生成角色设定图(character sheet)...');
+    
+    const sheetPrompt = `Character sheet of ${visualPrompt}, three views, front view, side view, back view, full body, same character, consistent design, flat color, clean lines, white background, anime style, masterpiece, best quality`;
+    
+    // 使用16:9宽幅比例，适合三视图并排布局
+    const result = await generateImage({ prompt: sheetPrompt, size: '1440x720' });
+    
+    // 下载完整设定图
+    const sheetFilename = `char-${characterId}-sheet-${variationId || 'base'}-${timestamp}.png`;
+    const sheetLocalPath = path.join(__dirname, '../uploads/images', sheetFilename);
+    await downloadImage(result.url, sheetLocalPath);
+    console.log('[ImageService] 角色设定图生成成功，开始裁切...');
+    
+    // 裁切为三视图（三等分）
+    const sharp = require('sharp');
+    const image = sharp(sheetLocalPath);
+    const metadata = await image.metadata();
+    const width = metadata.width;
+    const height = metadata.height;
+    const sliceWidth = Math.floor(width / 3);
+    
+    const views = [
+      { key: 'front', offset: 0 },
+      { key: 'side', offset: sliceWidth },
+      { key: 'back', offset: sliceWidth * 2 }
+    ];
+    
+    for (const view of views) {
+      try {
+        const viewFilename = `char-${characterId}-${view.key}-${variationId || 'base'}-${timestamp}.png`;
+        const viewLocalPath = path.join(__dirname, '../uploads/images', viewFilename);
+        const viewRelativePath = '/uploads/images/' + viewFilename;
+        
+        await image
+          .clone()
+          .extract({ left: view.offset, top: 0, width: sliceWidth, height: height })
+          .toFile(viewLocalPath);
+        
+        results[view.key] = viewRelativePath;
+        console.log(`[ImageService] ${view.key}视图裁切成功: ${viewRelativePath}`);
+      } catch (cropErr) {
+        console.error(`[ImageService] 裁切${view.key}视图失败:`, cropErr.message);
+      }
+    }
+    
+  } catch (err) {
+    console.error('[ImageService] 角色设定图生成失败，回退到单独生成:', err.message);
+    
+    // 回退方案B：单独生成三视图
+    const views = [
+      { key: 'front', suffix: 'front view, facing camera, full body' },
+      { key: 'side', suffix: 'side view, profile, full body' },
+      { key: 'back', suffix: 'back view, from behind, full body' }
+    ];
+    
+    for (const view of views) {
+      try {
+        console.log(`[ImageService] 回退：单独生成${view.key}视图...`);
+        const viewPrompt = `${visualPrompt}, ${view.suffix}, same character, consistent design, anime style, flat color, clean lines, white background, masterpiece, best quality`;
+        const result = await generateImage({ prompt: viewPrompt });
+        const filename = `char-${characterId}-${view.key}-${variationId || 'base'}-${timestamp}.png`;
+        const localPath = path.join(__dirname, '../uploads/images', filename);
+        const relativePath = '/uploads/images/' + filename;
+        await downloadImage(result.url, localPath);
+        results[view.key] = relativePath;
+      } catch (viewErr) {
+        console.error(`[ImageService] 生成${view.key}视图失败:`, viewErr.message);
+      }
     }
   }
   
@@ -293,7 +334,7 @@ async function generateCharacterImage(characterId, variationId = null, options =
   if (updateFields.length > 0) {
     updateValues.push(characterId);
     await pool.query(
-      `UPDATE characters SET ${updateFields.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = $${paramIndex}`,
+      `UPDATE characters SET ${updateFields.join(', ')} WHERE id = $${paramIndex}`,
       updateValues
     );
     console.log(`[ImageService] 数据库更新成功，共${updateFields.length / 2}个字段`);
