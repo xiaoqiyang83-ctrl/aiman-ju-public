@@ -1637,7 +1637,10 @@
             </div>
             <div class="character-actions">
               <el-button type="primary" @click="handleEditCharacter(selectedCharacter)">编辑角色</el-button>
-              <el-button type="success" @click="handleGenCharImage(selectedCharacter)">AI生成图</el-button>
+              <el-button type="success" @click="handleGenCharImage(selectedCharacter)" :loading="generatingImage[selectedCharacter.id]">
+                <el-icon><Picture /></el-icon>
+                {{ generatingImage[selectedCharacter.id] ? '生成中...' : 'AI生成三视图' }}
+              </el-button>
               <el-button type="warning" @click="handleCalibrateCharacter(selectedCharacter)" :loading="calibratingCharacter[selectedCharacter.id]">
                 <el-icon><MagicStick /></el-icon>
                 AI校准
@@ -3006,14 +3009,18 @@ const handleGenCharImage = async (char) => {
   }
   
   generatingImage[char.id] = true
-  ElMessage.info('正在使用CogView生成角色图片...')
+  ElMessage.info('正在使用CogView生成角色三视图（正面/侧面/背面）...')
   
   try {
     const response = await charactersAPI.generateImage(char.id, {})
-    if (response.success && response.imageUrl) {
-      ElMessage.success('角色图片生成成功！')
+    if (response.success) {
+      const viewCount = [response.front_image_url, response.side_image_url, response.back_image_url].filter(Boolean).length
+      ElMessage.success(`角色三视图生成完成（${viewCount}个视角）`)
       // 更新角色数据
-      char.image_url = response.imageUrl
+      if (response.front_image_url) char.front_image_url = response.front_image_url
+      if (response.side_image_url) char.side_image_url = response.side_image_url
+      if (response.back_image_url) char.back_image_url = response.back_image_url
+      if (response.image_url) char.image_url = response.image_url
       await loadCharacters()
     } else {
       ElMessage.error(response.message || '生成失败')

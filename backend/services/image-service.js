@@ -31,6 +31,40 @@ const DEFAULT_MODEL = 'cogview-3-flash';
 const DEFAULT_SIZE = '1024x1024';
 
 /**
+ * 根据角色身份锚点构建基础提示词
+ * @param {Object} character - 角色对象
+ * @returns {string} 英文提示词
+ */
+function buildCharacterBasePrompt(character) {
+  const anchors = character.identity_anchors || {};
+  const parts = [];
+  
+  // 核心身份
+  parts.push(character.name || 'character');
+  if (anchors.gender) parts.push(anchors.gender);
+  if (anchors.age) parts.push(anchors.age);
+  
+  // 体型
+  if (anchors.physique) parts.push(anchors.physique);
+  
+  // 面部
+  if (anchors.face) parts.push(anchors.face);
+  
+  // 发型
+  if (anchors.hair) parts.push(anchors.hair);
+  
+  // 服装
+  if (anchors.clothing) parts.push(anchors.clothing);
+  
+  // 如果没有identity_anchors，用description
+  if (parts.length <= 1 && character.description) {
+    return `1 person, ${character.description}`;
+  }
+  
+  return `1 person, ${parts.join(', ')}`;
+}
+
+/**
  * 下载图片到本地
  * @param {string} url - 图片URL
  * @param {string} localPath - 本地保存路径
@@ -131,16 +165,15 @@ async function generateImage({ prompt, model = DEFAULT_MODEL, size = DEFAULT_SIZ
 }
 
 /**
- * 生成角色图片（根据角色锚点+变体）
+ * 生成角色三视图（正面+侧面+背面）
  * @param {number} characterId - 角色ID
  * @param {number} [variationId] - 变体ID（可选）
  * @param {Object} [options] - 额外选项
- * @param {string} [options.view_type] - 视角类型（front/side/back）
  * @param {string} [options.prompt] - 自定义提示词（如果有）
- * @returns {Promise<Object>} { imageUrl: 本地路径 }
+ * @returns {Promise<Object>} { front, side, back } 各视角本地路径
  */
 async function generateCharacterImage(characterId, variationId = null, options = {}) {
-  const { view_type, prompt: customPrompt } = options;
+  const { prompt: customPrompt } = options;
   const { compileCharacterPrompt } = require('./character_calibration');
   
   // 获取角色信息
@@ -187,57 +220,72 @@ async function generateCharacterImage(characterId, variationId = null, options =
     visualPrompt = customPrompt;
   }
 
-  // 视角提示词映射
-  const viewPrompts = {
-    front: ', front view, facing the camera directly, full face visible, centered composition',
-    side: ', side profile view, 90 degree angle, showing full side profile',
-    back: ', back view, showing character from behind, no face visible'
-  };
+  // 三视图配置
+  const views = [
+    { key: 'front', suffix: 'front view, facing camera, full body', field: 'front_image_url' },
+    { key: 'side', suffix: 'side view, profile, full body', field: 'side_image_url' },
+    { key: 'back', suffix: 'back view, from behind, full body', field: 'back_image_url' }
+  ];
   
-  // 添加视角提示词（如果有）
-  if (view_type && viewPrompts[view_type]) {
-    visualPrompt = visualPrompt + viewPrompts[view_type];
-    console.log('[ImageService] 添加视角提示词: ' + view_type);
-  }
-
-  // 生成图片
-  const result = await generateImage({ prompt: visualPrompt });
-  
-  // 下载到本地
+  const results = {};
   const timestamp = Date.now();
-  const viewSuffix = view_type ? '-' + view_type : '';
-  const filename = 'char-' + characterId + viewSuffix + '-' + (variationId || 'base') + '-' + timestamp + '.png';
-  const localPath = path.join(__dirname, '../uploads/images', filename);
-  const relativePath = '/uploads/images/' + filename;
   
-  await downloadImage(result.url, localPath);
-  
-  // 根据视角类型更新对应的字段
-  if (view_type) {
-    const fieldMap = {
-      front: 'front_image_url',
-      side: 'side_image_url',
-      back: 'back_image_url'
-    };
-    const field = fieldMap[view_type];
-    if (field) {
-      await pool.query(
-        `UPDATE characters SET ${field} = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
-        [relativePath, characterId]
-      );
+  // 依次生成三视图（不并行，避免API限流）
+  for (const view of views) {
+    try {
+      console.log(`[ImageService] 开始生成${view.key}视图...`);
+      
+      const viewPrompt = `${visualPrompt}, ${view.suffix}, anime style, flat color, clean lines, white background, masterpiece, best quality`;
+      
+      // 生成图片
+      const result = await generateImage({ prompt: viewPrompt });
+      
+      // 下载到本地
+      const filename = `char-${characterId}-${view.key}-${variationId || 'base'}-${timestamp}.png`;
+      const localPath = path.join(__dirname, '../uploads/images', filename);
+      const relativePath = '/uploads/images/' + filename;
+      
+      await downloadImage(result.url, localPath);
+      
+      results[view.key] = relativePath;
+      console.log(`[ImageService] ${view.key}视图生成成功: ${relativePath}`);
+      
+    } catch (err) {
+      console.error(`[ImageService] 生成${view.key}视图失败:`, err.message);
     }
-  } else {
-    // 默认更新image_url
+  }
+  
+  // 批量更新数据库（保留已成功的部分）
+  const updateFields = [];
+  const updateValues = [];
+  let paramIndex = 1;
+  
+  if (results.front) {
+    updateFields.push(`front_image_url = $${paramIndex++}`);
+    updateValues.push(results.front);
+    // 兼容：同时更新image_url
+    updateFields.push(`image_url = $${paramIndex++}`);
+    updateValues.push(results.front);
+  }
+  if (results.side) {
+    updateFields.push(`side_image_url = $${paramIndex++}`);
+    updateValues.push(results.side);
+  }
+  if (results.back) {
+    updateFields.push(`back_image_url = $${paramIndex++}`);
+    updateValues.push(results.back);
+  }
+  
+  if (updateFields.length > 0) {
+    updateValues.push(characterId);
     await pool.query(
-      'UPDATE characters SET image_url = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-      [relativePath, characterId]
+      `UPDATE characters SET ${updateFields.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = $${paramIndex}`,
+      updateValues
     );
+    console.log(`[ImageService] 数据库更新成功，共${updateFields.length / 2}个字段`);
   }
 
-  return { 
-    imageUrl: relativePath,
-    localPath: localPath
-  };
+  return results;
 }
 
 /**

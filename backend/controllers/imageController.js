@@ -79,12 +79,12 @@ async function generateShot(req, res) {
 
 /**
  * POST /api/images/generate-character/:characterId
- * 生成角色图片
+ * 生成角色三视图（正面+侧面+背面）
  */
 async function generateCharacter(req, res) {
   try {
     const { id } = req.params;  // 从characters路由来，参数名是:id，不是:characterId
-    const { variation_id, view_type, prompt } = req.body || {};
+    const { variation_id, prompt } = req.body || {};
     
     if (!id) {
       return res.status(400).json({ 
@@ -93,16 +93,19 @@ async function generateCharacter(req, res) {
       });
     }
 
-    const result = await imageService.generateCharacterImage(
+    const results = await imageService.generateCharacterImage(
       parseInt(id), 
       variation_id ? parseInt(variation_id) : null,
-      { view_type, prompt }
+      { prompt }
     );
 
     res.json({
       success: true,
-      imageUrl: result.imageUrl,
-      message: '角色图片生成成功'
+      message: `角色三视图生成完成（${Object.keys(results).length}个视角）`,
+      front_image_url: results.front || null,
+      side_image_url: results.side || null,
+      back_image_url: results.back || null,
+      image_url: results.front || null
     });
   } catch (error) {
     console.error('[ImageController] 角色生图失败:', error);
