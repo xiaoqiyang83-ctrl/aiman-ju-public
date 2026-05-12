@@ -129,28 +129,42 @@ async function generateVideo({ prompt, imageUrl, model = DEFAULT_MODEL, size = D
     console.log('[VideoGenerateService] Image URL: ' + imageUrl);
   }
 
-  const response = await fetch(ZHIPU_BASE_URL + '/videos/generations', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer ' + ZHIPU_API_KEY
-    },
-    body: JSON.stringify(requestBody)
-  });
+  // 429重试逻辑
+  const MAX_RETRIES = 3;
+  let lastError = null;
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    const response = await fetch(ZHIPU_BASE_URL + '/videos/generations', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + ZHIPU_API_KEY
+      },
+      body: JSON.stringify(requestBody)
+    });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error('CogVideoX API错误: ' + response.status + ' - ' + errorText);
+    if (!response.ok) {
+      const errorText = await response.text();
+      if (response.status === 429 && attempt < MAX_RETRIES) {
+        const delay = attempt * 8000; // 8s, 16s, 24s - 视频生成限流更严
+        console.log('[VideoGenerateService] 429限流，第' + attempt + '次重试，等待' + (delay/1000) + '秒...');
+        await new Promise(resolve => setTimeout(resolve, delay));
+        lastError = new Error('CogVideoX API错误: ' + response.status + ' - ' + errorText);
+        continue;
+      }
+      throw new Error('CogVideoX API错误: ' + response.status + ' - ' + errorText);
+    }
+
+    const result = await response.json();
+
+    if (!result.id) {
+      throw new Error('CogVideoX API返回格式错误: ' + JSON.stringify(result));
+    }
+
+    console.log('[VideoGenerateService] 任务已提交, taskId: ' + result.id);
+    return { taskId: result.id };
   }
-
-  const result = await response.json();
-
-  if (!result.id) {
-    throw new Error('CogVideoX API返回格式错误: ' + JSON.stringify(result));
-  }
-
-  console.log('[VideoGenerateService] 任务已提交, taskId: ' + result.id);
-  return { taskId: result.id };
+  
+  throw lastError || new Error('CogVideoX API重试失败');
 }
 
 /**
