@@ -149,7 +149,7 @@ async function generateImage({ prompt, model = DEFAULT_MODEL, size = DEFAULT_SIZ
   console.log('[ImageService] Prompt: ' + prompt.substring(0, 100) + '...');
 
   // 429重试逻辑
-  const MAX_RETRIES = 3;
+  const MAX_RETRIES = 5;
   let lastError = null;
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     const response = await fetch(ZHIPU_BASE_URL + '/images/generations', {
@@ -164,7 +164,7 @@ async function generateImage({ prompt, model = DEFAULT_MODEL, size = DEFAULT_SIZ
     if (!response.ok) {
       const errorText = await response.text();
       if (response.status === 429 && attempt < MAX_RETRIES) {
-        const delay = attempt * 5000; // 5s, 10s, 15s
+        const delay = attempt * 15000; // 15s, 30s, 45s, 60s, 75s
         console.log('[ImageService] 429限流，第' + attempt + '次重试，等待' + (delay/1000) + '秒...');
         await new Promise(resolve => setTimeout(resolve, delay));
         lastError = new Error('CogView API错误: ' + response.status + ' - ' + errorText);
