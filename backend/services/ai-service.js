@@ -938,14 +938,24 @@ function autoFillDialogue(normalized, dialogueList) {
     for (var mi = 0; mi < missingDialogues.length; mi++) {
         var missing = missingDialogues[mi];
         
-        // 找到包含该角色的场景
+        // 优先匹配content中包含该台词原文的场景
         var targetScene = null;
         for (var sIdx = 0; sIdx < normalized.scenes.length; sIdx++) {
             var scene = normalized.scenes[sIdx];
-            if (scene.characters.indexOf(missing.character) !== -1 || 
-                (scene.content && scene.content.indexOf(missing.character) !== -1)) {
+            if (scene.content && scene.content.indexOf(missing.text) !== -1) {
                 targetScene = scene;
                 break;
+            }
+        }
+        // 如果content中没有，按角色名匹配最后一个包含该角色的场景
+        if (!targetScene) {
+            for (var sIdx2 = normalized.scenes.length - 1; sIdx2 >= 0; sIdx2--) {
+                var scene2 = normalized.scenes[sIdx2];
+                if (scene2.characters.indexOf(missing.character) !== -1 || 
+                    (scene2.content && scene2.content.indexOf(missing.character) !== -1)) {
+                    targetScene = scene2;
+                    break;
+                }
             }
         }
         
