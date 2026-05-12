@@ -3209,11 +3209,10 @@ const pollCogVideoStatus = async (shotId) => {
         }
       }
     } catch (err) {
-      console.error('轮询CogVideoX任务状态失败:', err)
-      clearInterval(cogVideoTaskTimers.value[shotId])
-      delete cogVideoTaskTimers.value[shotId]
+      // 查询失败不中断轮询，只打日志（404等情况后端已处理为processing）
+      console.warn('轮询CogVideoX任务状态异常:', err.message || err)
     }
-  }, 3000) // 每3秒轮询一次
+  }, 5000) // 每5秒轮询一次
 }
 
 // 批量生成CogVideoX视频
