@@ -194,14 +194,15 @@ async function submitExportJob(projectId, params, userId) {
   const jobId = generateJobId('export');
   await pool.query(
     `INSERT INTO task_jobs 
-      (job_id, queue_name, task_type, ref_id, ref_type, project_id, status, progress, params)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      (job_id, queue_name, task_type, ref_id, ref_type, user_id, project_id, status, progress, params)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
     [
       jobId,
       'exportQueue',
       'export_mp4',
       exportId,
       'export',
+      userId || 1,
       projectId,
       'pending',
       0,

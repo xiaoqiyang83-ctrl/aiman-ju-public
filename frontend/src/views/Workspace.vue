@@ -2656,6 +2656,9 @@ const loadTabData = async (tab) => {
       await loadVoices()
       await loadBGMList()
       await loadSFXList()
+      if (currentScriptId.value) {
+        await loadShotAudioStatus()
+      }
       break
   }
 }
