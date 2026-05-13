@@ -4006,8 +4006,8 @@ const handleSaveShot = async () => {
     })
     showShotDetailDialog.value = false
     ElMessage.success('分镜保存成功')
-    await loadScenes()
-    await loadShots()
+    await loadScenes(true)
+    await loadShots(true)
   } catch (err) {
     console.error('保存分镜失败:', err)
     ElMessage.error('保存失败: ' + (err.response?.data?.message || err.message))
@@ -4135,7 +4135,7 @@ const handleMergeAll = async () => {
   
   ElMessage.success('正在拼接视频...')
   try {
-    await videosAPI.merge(userStore.currentProject.id, {})
+    await videosAPI.merge({ project_id: userStore.currentProject.id })
     ElMessage.success('视频拼接任务已提交')
   } catch (err) {
     console.error('视频拼接失败:', err)
@@ -4310,7 +4310,7 @@ const handleApplyBGM = async () => {
       volume: bgmVolume.value
     })
     
-    await audioAPI.applyBGM({
+    await audioAPI.applyBgm({
       scene_id: currentScene.value?.id || 0,
       bgm_id: selectedBGM.value.id,
       volume: bgmVolume.value
@@ -4360,7 +4360,7 @@ const handleApplySFX = async () => {
       volume: sfxVolume.value
     })
     
-    await audioAPI.applySFX({
+    await audioAPI.applySfx({
       scene_id: currentScene.value?.id || 0,
       sfx_id: selectedSFX.value.id,
       volume: sfxVolume.value
