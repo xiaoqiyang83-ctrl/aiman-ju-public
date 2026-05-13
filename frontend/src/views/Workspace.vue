@@ -428,7 +428,7 @@
                       @click="handleShotClick(shot)"
                     >
                       <!-- 缩略图区域 -->
-                      <div class="shot-thumb-enhanced">
+                      <div class="shot-thumb-enhanced" @click.stop>
                         <el-image v-if="shot.thumbnail || shot.video_url || shot.result_url" :src="getAssetUrl(shot.thumbnail || shot.video_url || shot.result_url)" fit="cover" :preview-src-list="[getAssetUrl(shot.thumbnail || shot.video_url || shot.result_url)]" preview-teleported class="shot-preview-image" />
                         <el-image v-else-if="shot.scene_image_url" :src="getAssetUrl(shot.scene_image_url)" fit="cover" :preview-src-list="[getAssetUrl(shot.scene_image_url)]" preview-teleported alt="AI生成图" class="shot-ref-image-thumb shot-preview-image" />
                         <el-image v-else-if="shot.reference_image_url" :src="getAssetUrl(shot.reference_image_url)" fit="cover" :preview-src-list="[getAssetUrl(shot.reference_image_url)]" preview-teleported alt="场景参考图" class="shot-ref-image-thumb shot-preview-image" />
