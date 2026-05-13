@@ -152,8 +152,16 @@ async function batchGenerate(req, res) {
           withAudio
         });
         results.push({ shotId, taskId, success: true });
+        // 批量生成时增加间隔，避免连续429限流
+        if (shotIds.indexOf(shotId) < shotIds.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 3000));
+        }
       } catch (error) {
         errors.push({ shotId, error: error.message, success: false });
+        // 失败后也加延迟，给API喘息时间
+        if (shotIds.indexOf(shotId) < shotIds.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 5000));
+        }
       }
     }
 

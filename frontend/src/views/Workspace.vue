@@ -391,19 +391,19 @@
                       <ArrowDown />
                     </el-icon>
                     <div class="scene-actions-enhanced" @click.stop>
-                      <el-button size="small" type="success" :loading="generatingSceneImage[scene.id]" @click="handleGenerateSceneImage(scene)" title="生成场景概念图">
+                      <el-button size="small" type="success" :loading="generatingSceneImage[scene.id]" @click="handleGenerateSceneImage(scene)" title="生成该场景的概念参考图">
                         <el-icon><Picture /></el-icon>
                         场景图
                       </el-button>
-                      <el-button size="small" type="primary" @click="handleGenerateSceneVideo(scene)">
+                      <el-button size="small" type="primary" @click="handleGenerateSceneVideo(scene)" title="批量生成该场景下所有镜头的视频">
                         <el-icon><VideoPlay /></el-icon>
                         生成视频
                       </el-button>
-                      <el-button size="small" @click="handleEditScene(scene)">
+                      <el-button size="small" @click="handleEditScene(scene)" title="编辑场景信息（标题、地点、时间等）">
                         <el-icon><Edit /></el-icon>
                         编辑
                       </el-button>
-                      <el-button size="small" type="danger" @click="handleDeleteScene(scene)">
+                      <el-button size="small" type="danger" @click="handleDeleteScene(scene)" title="删除整个场景及所有镜头">
                         <el-icon><Delete /></el-icon>
                         删除
                       </el-button>
@@ -450,7 +450,7 @@
                               CogVideo
                             </el-button>
                           </template>
-                          <el-select v-model="shotImageSize" size="small" style="width: 100px;">
+                            <el-select :model-value="getShotImageSize(shot.id)" @update:model-value="(val) => setShotImageSize(shot.id, val)" size="small" style="width: 100px;" title="选择该分镜的生图尺寸（可覆盖全局）">
                             <el-option v-for="(item, key) in IMAGE_SIZE_MAP" :key="key" :label="item.label" :value="key" />
                           </el-select>
                           <el-button
@@ -2134,6 +2134,7 @@ const videoModel = ref('cogvideox-flash')
 
 // 生图尺寸选择（语义化key）
 const shotImageSize = ref('landscape_16_9')
+const shotImageSizes = ref({}) // 每个分镜的独立尺寸 { shotId: sizeKey }
 const IMAGE_SIZE_MAP = {
   square_1_1: { label: '正方形 1:1', value: '1024x1024' },
   landscape_16_9: { label: '横屏 16:9', value: '1344x768' },
@@ -2141,6 +2142,14 @@ const IMAGE_SIZE_MAP = {
   landscape_2_1: { label: '横屏 2:1', value: '1440x720' },
   portrait_9_16: { label: '竖屏 9:16', value: '768x1344' },
   portrait_3_4: { label: '竖屏 3:4', value: '864x1152' },
+}
+// 获取分镜的生图尺寸（优先使用分镜级别，否则使用全局）
+function getShotImageSize(shotId) {
+  return shotImageSizes.value[shotId] || shotImageSize.value
+}
+// 设置分镜的生图尺寸
+function setShotImageSize(shotId, sizeKey) {
+  shotImageSizes.value[shotId] = sizeKey
 }
 const isEditingCharacter = ref(false)
 const currentEditingCharacter = ref(null)
@@ -5681,19 +5690,20 @@ const handleMoveShot = async (scene, shot, direction) => {
 }
 
 .shot-thumb-enhanced img,
-.shot-thumb-enhanced .shot-preview-image {
+.shot-thumb-enhanced .el-image {
   width: 100%;
   height: 100%;
   display: block;
+  cursor: pointer;
 }
-.shot-thumb-enhanced .shot-preview-image :deep(.el-image__inner) {
+.shot-thumb-enhanced .el-image :deep(.el-image__inner) {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  cursor: zoom-in;
+  cursor: pointer;
 }
-.shot-thumb-enhanced .shot-preview-image :deep(.el-image__error),
-.shot-thumb-enhanced .shot-preview-image :deep(.el-image__placeholder) {
+.shot-thumb-enhanced .el-image :deep(.el-image__error),
+.shot-thumb-enhanced .el-image :deep(.el-image__placeholder) {
   width: 100%;
   height: 100%;
 }

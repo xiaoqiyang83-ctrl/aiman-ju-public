@@ -46,7 +46,7 @@ async function generate(req, res) {
 async function update(req, res) {
   try {
     const { id } = req.params;
-    const { title, location, time_of_day, content, characters } = req.body;
+    const { title, location, time_of_day, content, characters, scene_image_url } = req.body;
     const userId = 1;
 
     const row = await sceneService.updateScene({
@@ -57,6 +57,7 @@ async function update(req, res) {
       timeOfDay: time_of_day,
       content,
       characters,
+      scene_image_url,
     });
 
     if (!row) {
