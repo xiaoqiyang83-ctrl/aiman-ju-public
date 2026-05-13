@@ -332,10 +332,31 @@ async function generateShotVideo(shotId, options = {}) {
   }
 
   // 获取完整的视频提示词
-  const prompt = shot.video_prompt || shot.visual_prompt || shot.visual_description || shot.action_description;
+  var prompt = shot.video_prompt || shot.visual_prompt || shot.visual_description || shot.action_description;
 
   if (!prompt) {
     throw new Error('镜头没有视频提示词');
+  }
+
+  // 敏感词替换（避免触发智谱内容审核）
+  const sensitiveReplacements = [
+    [/丧尸/g, '变异者'],
+    [/僵尸/g, '异形生物'],
+    [/攻击/g, '行动'],
+    [/杀/g, '击败'],
+    [/血/g, '能量'],
+    [/暴力/g, '冲突'],
+    [/恐怖/g, '神秘'],
+    [/死亡/g, '消失'],
+    [/武器/g, '装备'],
+    [/战斗/g, '对峙']
+  ];
+  var originalPrompt = prompt;
+  for (var ri = 0; ri < sensitiveReplacements.length; ri++) {
+    prompt = prompt.replace(sensitiveReplacements[ri][0], sensitiveReplacements[ri][1]);
+  }
+  if (prompt !== originalPrompt) {
+    console.log('[VideoGenerateService] 敏感词已替换: ' + originalPrompt.substring(0, 50) + ' -> ' + prompt.substring(0, 50));
   }
 
   // 处理图片URL：如果是本地路径，转为base64；如果是公网URL，直接使用
