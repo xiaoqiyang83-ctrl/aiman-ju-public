@@ -141,7 +141,15 @@ export const shotsAPI = {
   create: (data) => api.post('/shots', data),
   update: (id, data) => api.put('/shots/' + id, data),
   delete: (id) => api.delete('/shots/' + id),
-  lipSync: (id) => api.post('/shots/' + id + '/lip-sync')
+  lipSync: (id) => api.post('/shots/' + id + '/lip-sync'),
+  uploadRefImage: (id, file, field = 'reference_image_url') => {
+    const formData = new FormData()
+    formData.append('image', file)
+    formData.append('field', field)
+    return api.post('/shots/' + id + '/upload-ref-image', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+  }
 }
 
 // ==================== 视频相关 ====================

@@ -3959,29 +3959,32 @@ const handleDeleteShotFromDialog = async () => {
 }
 
 const handleShotDetailRefChange = (file) => {
-  const reader = new FileReader()
-  reader.onload = (e) => {
-    currentShot.value.reference_image_url = e.target.result
-    // 自动保存到数据库
-    handleSaveShot()
-  }
-  reader.readAsDataURL(file.raw)
+  // 直接上传文件到服务器，不存base64
+  if (!currentShot.value?.id) return
+  shotsAPI.uploadRefImage(currentShot.value.id, file.raw, 'reference_image_url').then(res => {
+    if (res.success || res.data?.success) {
+      const imageUrl = res.imageUrl || res.data?.imageUrl
+      currentShot.value.reference_image_url = imageUrl
+      ElMessage.success('参考图上传成功')
+      handleSaveShot()
+    }
+  }).catch(err => {
+    console.error('上传参考图失败:', err)
+    ElMessage.error('上传失败: ' + (err.response?.data?.message || err.message))
+  })
 }
 
 const handleShotRefUpload = (file, shot) => {
-  const reader = new FileReader()
-  reader.onload = async (e) => {
-    const base64Image = e.target.result
-    try {
-      await shotsAPI.update(shot.id, { reference_image_url: base64Image })
-      shot.reference_image_url = base64Image
+  shotsAPI.uploadRefImage(shot.id, file.raw, 'reference_image_url').then(res => {
+    if (res.success || res.data?.success) {
+      const imageUrl = res.imageUrl || res.data?.imageUrl
+      shot.reference_image_url = imageUrl
       ElMessage.success('场景参考图上传成功')
-    } catch (err) {
-      console.error('上传场景参考图失败:', err)
-      ElMessage.error('上传失败')
     }
-  }
-  reader.readAsDataURL(file.raw)
+  }).catch(err => {
+    console.error('上传场景参考图失败:', err)
+    ElMessage.error('上传失败: ' + (err.response?.data?.message || err.message))
+  })
 }
 
 const handleSaveShot = async () => {

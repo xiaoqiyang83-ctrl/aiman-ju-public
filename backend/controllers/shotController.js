@@ -164,4 +164,28 @@ module.exports = {
   update,
   remove,
   lipSync,
+  uploadRefImage,
 };
+
+async function uploadRefImage(req, res) {
+  try {
+    const shotId = parseInt(req.params.id);
+    if (!shotId || Number.isNaN(shotId)) {
+      return res.status(400).json({ success: false, message: '无效的镜头ID' });
+    }
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: '请上传图片文件' });
+    }
+    const relativePath = '/uploads/images/' + req.file.filename;
+    const field = req.body.field || 'reference_image_url'; // 默认存参考图，也支持scene_image_url
+    await shotService.updateShot({
+      id: shotId,
+      referenceImageUrl: field === 'reference_image_url' ? relativePath : undefined,
+      sceneImageUrl: field === 'scene_image_url' ? relativePath : undefined,
+    });
+    res.json({ success: true, imageUrl: relativePath, message: '图片上传成功' });
+  } catch (err) {
+    console.error('[Shots] 上传参考图失败:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+}
