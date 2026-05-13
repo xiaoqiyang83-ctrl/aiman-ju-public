@@ -4020,7 +4020,8 @@ const loadShots = async (forceReload = false) => {
   if (!forceReload && videoList.value.length > 0 && videoListKey.value === key) return
   loadingVideos.value = true
   try {
-    if (!scenes.value.length) {
+    // forceReload时重新加载scenes的shots数据
+    if (forceReload || !scenes.value.length) {
       await loadScenes(forceReload)
     }
     // 从scenes数据构建videoList（优先用已有数据）
