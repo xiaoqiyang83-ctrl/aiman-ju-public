@@ -5959,7 +5959,7 @@ const handleMoveShot = async (scene, shot, direction) => {
 
 /* 音频相关 */
 .audio-content {
-  overflow: hidden;
+  overflow-y: auto;
 }
 
 .audio-sub-tabs {
@@ -6760,7 +6760,8 @@ const handleMoveShot = async (scene, shot, direction) => {
 }
 
 .list-content {
-  max-height: 500px;
+  max-height: calc(100vh - 500px);
+  min-height: 200px;
   overflow-y: auto;
 }
 
