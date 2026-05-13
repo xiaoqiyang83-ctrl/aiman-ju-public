@@ -688,7 +688,7 @@
                 <!-- 时间轴轨道 -->
                 <div class="timeline-track-container" ref="timelineTrackRef">
                   <!-- 时间刻度 -->
-                  <div class="time-ruler">
+                  <div class="time-ruler" :style="{ width: Math.max(timelineTotalDuration * pixelsPerSecond + 40, 600) + 'px' }">
                     <div 
                       v-for="i in timelineScaleMarks" 
                       :key="i"
@@ -706,7 +706,7 @@
                   </div>
                   
                   <!-- 镜头轨道 -->
-                  <div class="clips-track" @click="onTrackClick">
+                  <div class="clips-track" :style="{ width: Math.max(timelineTotalDuration * pixelsPerSecond + 40, 600) + 'px' }" @click="onTrackClick">
                     <div 
                       v-for="(item, index) in timelineItems" 
                       :key="item.id"
@@ -2420,7 +2420,7 @@ const timelineCurrentTime = ref(0) // 当前播放时间（秒）
 const timelineTotalDuration = ref(0) // 总时长（秒）
 const isTimelinePlaying = ref(false) // 是否正在播放
 const selectedTransition = ref('none') // 选中的转场效果
-const pixelsPerSecond = 80 // 每秒像素数
+const pixelsPerSecond = 40 // 每秒像素数
 const timelineVideoRef = ref(null) // 时间轴视频引用
 const timelineTrackRef = ref(null) // 时间轴轨道引用
 const timelinePlayTimer = ref(null) // 播放定时器
@@ -2465,16 +2465,15 @@ const getClipWidth = (duration) => {
 
 // 从videoList构建时间轴项目
 const buildTimelineItems = () => {
-  timelineItems.value = videoList.value
-    .filter(s => s.video_url || s.scene_image_url || s.reference_image_url)
-    .map(s => ({
-      ...s,
-      duration: s.duration || 3,
-      transition: s.transition || 'none',
-      has_video: !!s.video_url,
-      has_audio: !!s.audio_url,
-      thumbnail: s.thumbnail || s.scene_image_url || s.reference_image_url
-    }))
+  const source = videoList.value.length > 0 ? videoList.value : shots.value
+  timelineItems.value = source.map(s => ({
+    ...s,
+    duration: s.duration || 3,
+    transition: s.transition || 'none',
+    has_video: !!s.video_url,
+    has_audio: !!s.audio_url,
+    thumbnail: s.thumbnail || s.scene_image_url || s.reference_image_url
+  }))
   
   // 计算总时长
   timelineTotalDuration.value = timelineItems.value.reduce((sum, item) => sum + (item.duration || 3), 0)
@@ -3145,6 +3144,7 @@ const loadTabData = async (tab) => {
       break
     case 'video':
       await loadShots()
+      buildTimelineItems()
       break
     case 'audio':
       await loadVoices()
@@ -7408,23 +7408,23 @@ const handleMoveShot = async (scene, shot, direction) => {
 .timeline-editor {
   background: #1a1a2e;
   border-radius: 8px;
-  padding: 16px;
+  padding: 12px;
   margin-bottom: 12px;
-  min-height: 320px;
+  min-height: 260px;
 }
 
 /* 预览区域 */
 .preview-area {
   background: #16213e;
   border-radius: 8px;
-  padding: 16px;
-  margin-bottom: 16px;
+  padding: 12px;
+  margin-bottom: 12px;
 }
 
 .preview-container {
   width: 100%;
-  max-width: 640px;
-  height: 200px;
+  max-width: 480px;
+  height: 180px;
   margin: 0 auto;
   background: #0f0f23;
   border-radius: 8px;
