@@ -5746,6 +5746,11 @@ const handleMoveShot = async (scene, shot, direction) => {
   pointer-events: none;
 }
 
+.shot-overlay .el-button,
+.shot-overlay .el-select {
+  pointer-events: auto;
+}
+
 .shot-card-enhanced:hover .shot-overlay {
   opacity: 1;
 }
