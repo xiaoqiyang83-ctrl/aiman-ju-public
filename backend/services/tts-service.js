@@ -195,19 +195,16 @@ async function synthesizeEdgeTTS(text, voice, outputPath, options = {}) {
     fs.mkdirSync(dir, { recursive: true });
   }
 
-  // 如果有情感参数，使用SSML
+  // 如果有情感参数，合并到rate/pitch/volume参数中（edge-tts不支持--ssml）
   let cmd;
   if (emotion && EMOTION_PARAMS[emotion]) {
     const emotionParams = EMOTION_PARAMS[emotion];
-    const ssmlText = textToSSML(text, {
-      emotion,
-      rate: options.rate || emotionParams.rate,
-      pitch: options.pitch || emotionParams.pitch,
-      volume: options.volume || emotionParams.volume
-    });
-    cmd = `edge-tts --ssml "${ssmlText.replace(/"/g, '\\"')}" --voice ${voice} --write-media "${outputPath}"`;
+    const finalRate = options.rate || emotionParams.rate || '+0%';
+    const finalPitch = options.pitch || emotionParams.pitch || '+0Hz';
+    const finalVolume = options.volume || emotionParams.volume || '+0%';
+    cmd = `edge-tts --text "${text.replace(/"/g, '\\"')}" --voice ${voice} --rate ${finalRate} --volume ${finalVolume} --pitch ${finalPitch} --write-media "${outputPath}"`;
   } else {
-    cmd = `edge-tts --text "${text.replace(/"/g, '\\"')}" --voice ${voice} --rate ${rate} --volume ${volume} --write-media "${outputPath}"`;
+    cmd = `edge-tts --text "${text.replace(/"/g, '\\"')}" --voice ${voice} --rate ${rate} --volume ${volume} --pitch ${pitch} --write-media "${outputPath}"`;
   }
 
   console.log('[TTS] 开始生成配音 (Edge):', { text: text.substring(0, 50), voice, outputPath });
@@ -344,11 +341,16 @@ async function generateShotAudio(shotId, voice, options = {}) {
   }
   
   const shot = shotRes.rows[0];
-  const text = shot.dialogue || shot.original_text || '';
+  let text = shot.dialogue || shot.original_text || '';
   
   if (!text || text.trim() === '') {
     throw new Error('镜头没有台词');
   }
+
+  // 清洗文本：去除角色标注（如 @队长：、@队员甲：）和多余标记
+  text = text.replace(/@[^：:]+[：:]/g, '').trim();
+  // 去除方括号标记（如 [旁白]）
+  text = text.replace(/\[([^\]]+)\]/g, '').trim();
 
   // 使用角色绑定的默认音色或指定音色
   const actualVoice = voice || shot.char_default_voice || 'zh-CN-XiaoxiaoNeural';
