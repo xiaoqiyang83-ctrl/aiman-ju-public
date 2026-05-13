@@ -85,6 +85,8 @@ async function update(req, res) {
       scene_image_url,
       character_angle,
       reference_image_url,
+      trim_start,
+      trim_end,
     } = req.body;
 
     const row = await shotService.updateShot({
@@ -102,6 +104,8 @@ async function update(req, res) {
       sceneImageUrl: scene_image_url,
       characterAngle: character_angle,
       referenceImageUrl: reference_image_url,
+      trimStart: trim_start,
+      trimEnd: trim_end,
     });
 
     if (!row) {

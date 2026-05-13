@@ -79,6 +79,8 @@ async function updateShot({
   sceneImageUrl,
   characterAngle,
   referenceImageUrl,
+  trimStart,
+  trimEnd,
 }) {
   const result = await pool.query(
     `UPDATE shots SET
@@ -94,7 +96,9 @@ async function updateShot({
       character_id = COALESCE($10, character_id),
       scene_image_url = COALESCE($11, scene_image_url),
       character_angle = COALESCE($12, character_angle),
-      reference_image_url = COALESCE($14, reference_image_url)
+      reference_image_url = COALESCE($14, reference_image_url),
+      trim_start = COALESCE($15, trim_start),
+      trim_end = COALESCE($16, trim_end)
     WHERE id = $13
     RETURNING *`,
     [
@@ -112,6 +116,8 @@ async function updateShot({
       characterAngle ?? null,
       id,
       referenceImageUrl ?? null,
+      trimStart ?? null,
+      trimEnd ?? null,
     ]
   );
   return result.rows[0] || null;

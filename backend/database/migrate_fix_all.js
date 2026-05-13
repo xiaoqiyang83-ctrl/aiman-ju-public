@@ -44,6 +44,8 @@ async function migrate() {
       ['visual_prompt', 'TEXT'],
       ['lip_sync_status', 'VARCHAR(20) DEFAULT \'pending\''],
       ['lip_sync_video_url', 'VARCHAR(500)'],
+      ['trim_start', 'FLOAT DEFAULT 0'],
+      ['trim_end', 'FLOAT DEFAULT 0'],
     ];
     for (const [col, type] of shotsColumns) {
       try {

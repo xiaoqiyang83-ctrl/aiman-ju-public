@@ -709,6 +709,7 @@
                       <el-button size="small" type="primary" link @click.stop="handleShotClick(row)">编辑</el-button>
                       <el-button size="small" @click.stop="handleGenerateSingle(row)">生成</el-button>
                       <el-button v-if="row.video_status === 'completed'" size="small" type="success" @click.stop="handlePreviewVideo(row)">预览</el-button>
+                      <el-button v-if="row.video_status === 'completed'" size="small" type="info" @click.stop="handleTrimVideo(row)">裁剪</el-button>
                       <el-button v-if="row.video_status === 'completed'" size="small" type="warning" @click.stop="handleRegenerate(row)">重生</el-button>
                       <el-button v-if="row.video_status === 'completed' && row.result_url" size="small" type="primary" @click.stop="handleDownloadVideo(row)">下载</el-button>
                       <el-button size="small" type="danger" link @click.stop="handleDeleteShot(row)">删除</el-button>
@@ -720,6 +721,35 @@
                 </div>
               </div>
             </div>
+
+            <!-- 视频裁剪弹窗 -->
+            <el-dialog v-model="showTrimDialog" title="视频裁剪" width="680px" :close-on-click-modal="false">
+              <div v-if="trimVideoUrl" class="trim-dialog-content">
+                <div class="trim-video-area">
+                  <video ref="trimVideoRef" :src="trimVideoUrl" class="trim-video-player" @loadedmetadata="onTrimVideoLoaded" @timeupdate="onTrimTimeUpdate"></video>
+                </div>
+                <div class="trim-controls">
+                  <div class="trim-range-row">
+                    <span class="trim-label">起始：</span>
+                    <el-slider v-model="trimStart" :min="0" :max="trimDuration" :step="0.1" :format-tooltip="v => v.toFixed(1) + 's'" style="flex:1" @input="seekTrimVideo" />
+                    <span class="trim-value">{{ trimStart.toFixed(1) }}s</span>
+                  </div>
+                  <div class="trim-range-row">
+                    <span class="trim-label">结束：</span>
+                    <el-slider v-model="trimEnd" :min="0" :max="trimDuration" :step="0.1" :format-tooltip="v => v.toFixed(1) + 's'" style="flex:1" @input="seekTrimVideo" />
+                    <span class="trim-value">{{ trimEnd.toFixed(1) }}s</span>
+                  </div>
+                  <div class="trim-info">
+                    裁剪后时长：<strong>{{ Math.max(0, trimEnd - trimStart).toFixed(1) }}s</strong>
+                    <el-button size="small" type="primary" @click="playTrimPreview" style="margin-left:12px">预览裁剪段</el-button>
+                  </div>
+                </div>
+              </div>
+              <template #footer>
+                <el-button @click="showTrimDialog = false">取消</el-button>
+                <el-button type="primary" @click="saveTrimRange">确认裁剪</el-button>
+              </template>
+            </el-dialog>
           </el-tab-pane>
 
           <!-- 音频Tab -->
@@ -2255,6 +2285,78 @@ const videoListKey = ref('')
 const selectedVideos = ref([])
 const previewVideoUrl = ref('')
 const exportResultUrl = ref('')
+
+// ==================== 视频裁剪相关 ====================
+const showTrimDialog = ref(false)
+const trimVideoUrl = ref('')
+const trimVideoRef = ref(null)
+const trimShotId = ref(null)
+const trimStart = ref(0)
+const trimEnd = ref(0)
+const trimDuration = ref(0)
+
+const handleTrimVideo = (row) => {
+  if (!row.video_url && !row.result_url) {
+    ElMessage.warning('暂无视频可裁剪')
+    return
+  }
+  trimShotId.value = row.id
+  trimVideoUrl.value = getAssetUrl(row.video_url || row.result_url)
+  trimStart.value = row.trim_start || 0
+  trimEnd.value = row.trim_end || 0
+  trimDuration.value = 0
+  showTrimDialog.value = true
+}
+
+const onTrimVideoLoaded = () => {
+  const v = trimVideoRef.value
+  if (v) {
+    trimDuration.value = v.duration
+    if (!trimEnd.value || trimEnd.value > v.duration) {
+      trimEnd.value = parseFloat(v.duration.toFixed(1))
+    }
+  }
+}
+
+const onTrimTimeUpdate = () => {}
+
+const seekTrimVideo = () => {
+  const v = trimVideoRef.value
+  if (v) {
+    v.currentTime = trimStart.value
+  }
+}
+
+const playTrimPreview = () => {
+  const v = trimVideoRef.value
+  if (v) {
+    v.currentTime = trimStart.value
+    v.play()
+    // 播放到trimEnd自动暂停
+    const checkEnd = () => {
+      if (v.currentTime >= trimEnd.value) {
+        v.pause()
+        v.removeEventListener('timeupdate', checkEnd)
+      }
+    }
+    v.addEventListener('timeupdate', checkEnd)
+  }
+}
+
+const saveTrimRange = async () => {
+  try {
+    await shotsAPI.update(trimShotId.value, {
+      trim_start: trimStart.value,
+      trim_end: trimEnd.value
+    })
+    ElMessage.success(`裁剪范围已保存：${trimStart.value.toFixed(1)}s - ${trimEnd.value.toFixed(1)}s`)
+    showTrimDialog.value = false
+    await loadShots()
+  } catch (err) {
+    console.error('保存裁剪范围失败:', err)
+    ElMessage.error('保存失败')
+  }
+}
 
 // ==================== 音频相关 ====================
 // 音频库相关
@@ -6945,3 +7047,55 @@ const handleMoveShot = async (scene, shot, direction) => {
   margin-bottom: 16px;
 }
 
+
+.trim-dialog-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.trim-video-area {
+  background: #000;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  justify-content: center;
+}
+
+.trim-video-player {
+  max-width: 100%;
+  max-height: 320px;
+}
+
+.trim-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.trim-range-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.trim-label {
+  font-size: 13px;
+  color: #606266;
+  min-width: 40px;
+}
+
+.trim-value {
+  font-size: 13px;
+  color: #409eff;
+  min-width: 48px;
+  text-align: right;
+  font-family: monospace;
+}
+
+.trim-info {
+  font-size: 13px;
+  color: #606266;
+  display: flex;
+  align-items: center;
+}
