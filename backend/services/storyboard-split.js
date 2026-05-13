@@ -652,6 +652,7 @@ function generateShotsForScene(scene, sceneText) {
       visual_description: visualPrompt,
       original_text,
       dialogue: dialogue || '',
+      speaker: p.speaker || '',
       action_description: dialogue ? original_text.replace(/["“”「」].*?["“”「」]/g, '').trim() : original_text,
     });
   }

@@ -103,13 +103,27 @@ async function createFromTemplate({ templateId, projectName, userId }) {
       const sceneId = sceneRes.rows[0].id;
 
       const { shots } = generateShotsForScene({ id: sceneId, title: sp.title || `场景${i + 1}` }, sp.content);
+      
+      // 获取该剧本下的所有角色，用于匹配speaker
+      const charsRes = await client.query('SELECT id, name FROM characters WHERE script_id = $1', [scriptId]);
+      const charNameMap = {};
+      for (const c of charsRes.rows) {
+        charNameMap[c.name] = c.id;
+      }
+      
       for (const sh of shots) {
+        // 通过speaker名匹配character_id
+        let characterId = null;
+        if (sh.speaker) {
+          characterId = charNameMap[sh.speaker] || null;
+        }
+        
         await client.query(
           `INSERT INTO shots (
              scene_id, script_id, user_id, shot_number, shot_type, camera_movement,
-             visual_description, visual_prompt, original_text, dialogue, action_description, duration, video_status, status
+             visual_description, visual_prompt, original_text, dialogue, action_description, duration, character_id, video_status, status
            )
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'none', 'pending')`,
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'none', 'pending')`,
           [
             sceneId,
             scriptId,
@@ -123,6 +137,7 @@ async function createFromTemplate({ templateId, projectName, userId }) {
             sh.dialogue || '',
             sh.action_description || '',
             sh.duration ?? 4,
+            characterId,
           ]
         );
       }

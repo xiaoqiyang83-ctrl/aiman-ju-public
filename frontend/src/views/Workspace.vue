@@ -852,7 +852,7 @@
                               <el-form-item>
                                 <el-button type="primary" :loading="batchTTSLoading" @click="handleBatchTTS">
                                   <el-icon><Microphone /></el-icon>
-                                  批量生成配音
+                                  {{ selectedShotForTTS.length > 0 ? `为选中镜头配音 (${selectedShotForTTS.length})` : '批量生成配音' }}
                                 </el-button>
                                 <el-button @click="loadShotAudioStatus">
                                   <el-icon><Refresh /></el-icon>
@@ -866,10 +866,12 @@
                           <div class="shot-audio-list" v-loading="loadingShotAudio">
                             <div class="list-header">
                               <span class="header-title">镜头配音列表</span>
-                              <span class="header-count">共 {{ shotAudioList.length }} 个镜头，{{ shotAudioList.filter(s => s.audio_url).length }} 个已配音</span>
+                              <span class="header-count">共 {{ shotAudioList.length }} 个镜头，{{ shotAudioList.filter(s => s.audio_url).length }} 个已配音，已选 {{ selectedShotForTTS.length }} 个</span>
+                              <el-checkbox v-model="selectAllShotsForTTS" @change="toggleSelectAllShots" style="margin-left:8px">全选</el-checkbox>
                             </div>
                             <div class="list-content">
-                              <div v-for="shot in shotAudioList" :key="shot.id" class="shot-audio-item">
+                              <div v-for="shot in shotAudioList" :key="shot.id" class="shot-audio-item" :class="{ selected: selectedShotForTTS.includes(shot.id) }">
+                                <el-checkbox :model-value="selectedShotForTTS.includes(shot.id)" @change="(val) => toggleShotSelection(shot.id, val)" style="margin-right:8px" />
                                 <div class="shot-info">
                                   <span class="shot-number">{{ shot.shot_number }}</span>
                                   <div class="shot-detail">
@@ -2501,7 +2503,8 @@ const voiceTab = ref('shots') // shots: 镜头配音, characters: 角色音色�
 const shotAudioList = ref([]) // 剧本下所有镜头的配音状态
 const loadingShotAudio = ref(false)
 const batchTTSLoading = ref(false)
-const selectedShotsForTTS = ref([]) // 选中的镜头列表
+const selectedShotForTTS = ref([]) // 选中的镜头列表
+const selectAllShotsForTTS = ref(false)
 const currentPlayingShot = ref(null) // 当前正在播放的镜头
 const audioPreviewRef = ref(null) // 音频预览引用
 
@@ -2518,6 +2521,27 @@ const loadShotAudioStatus = async () => {
     console.error('加载配音状态失败:', err)
   } finally {
     loadingShotAudio.value = false
+  }
+}
+
+// 勾选/取消镜头
+const toggleShotSelection = (shotId, val) => {
+  if (val) {
+    if (!selectedShotForTTS.value.includes(shotId)) {
+      selectedShotForTTS.value.push(shotId)
+    }
+  } else {
+    selectedShotForTTS.value = selectedShotForTTS.value.filter(id => id !== shotId)
+  }
+  selectAllShotsForTTS.value = selectedShotForTTS.value.length === shotAudioList.value.length
+}
+
+// 全选/取消全选
+const toggleSelectAllShots = (val) => {
+  if (val) {
+    selectedShotForTTS.value = shotAudioList.value.map(s => s.id)
+  } else {
+    selectedShotForTTS.value = []
   }
 }
 
@@ -2560,21 +2584,32 @@ const handleBatchTTS = async () => {
     return
   }
   
-  // 获取所有有台词的镜头
-  const shotsWithDialogue = shotAudioList.value.filter(s => 
-    s.dialogue || s.original_text
-  )
+  // 确定要配音的镜头
+  let targetShots
+  if (selectedShotForTTS.value.length > 0) {
+    targetShots = shotAudioList.value.filter(s => selectedShotForTTS.value.includes(s.id))
+  } else {
+    targetShots = shotAudioList.value.filter(s => s.dialogue || s.original_text)
+  }
   
-  if (shotsWithDialogue.length === 0) {
-    ElMessage.warning('当前剧本没有需要配音的镜头')
+  if (targetShots.length === 0) {
+    ElMessage.warning('没有需要配音的镜头')
     return
   }
 
   batchTTSLoading.value = true
   try {
     const params = formatTTSParams()
+    // 构建每个镜头的音色映射：优先用角色绑定音色
+    const shotVoiceMap = targetShots.map(s => ({
+      shotId: s.id,
+      voice: s.voice_id || s.char_default_voice || ttsForm.voiceId || 'zh-CN-XiaoxiaoNeural'
+    }))
+    
     const res = await ttsAPI.generateBatch({
       scriptId: currentScriptId.value,
+      shotIds: shotVoiceMap.map(s => s.shotId),
+      shotVoiceMap,
       voice: ttsForm.voiceId || 'zh-CN-XiaoxiaoNeural',
       volume: params.volume,
       rate: params.rate,
@@ -6917,6 +6952,11 @@ const handleMoveShot = async (scene, shot, direction) => {
 
 .shot-audio-item:hover {
   background: #f5f7fa;
+  border-color: #409eff;
+}
+
+.shot-audio-item.selected {
+  background: #ecf5ff;
   border-color: #409eff;
 }
 

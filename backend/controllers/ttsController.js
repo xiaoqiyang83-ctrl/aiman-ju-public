@@ -103,7 +103,7 @@ async function generate(req, res) {
  */
 async function generateBatch(req, res) {
   try {
-    const { scriptId, voice, rate, volume, pitch, emotion } = req.body;
+    const { scriptId, voice, rate, volume, pitch, emotion, shotIds, shotVoiceMap } = req.body;
 
     if (!scriptId) {
       return res.status(400).json({ 
@@ -118,8 +118,18 @@ async function generateBatch(req, res) {
     if (pitch !== undefined) options.pitch = pitch;
     if (emotion !== undefined) options.emotion = emotion;
 
+    // 支持按镜头指定音色
+    const voiceMap = {};
+    if (Array.isArray(shotVoiceMap)) {
+      for (const item of shotVoiceMap) {
+        if (item.shotId && item.voice) {
+          voiceMap[item.shotId] = item.voice;
+        }
+      }
+    }
+
     // 异步执行批量生成，避免超时
-    const result = await ttsService.batchGenerateAudio(scriptId, voice, options);
+    const result = await ttsService.batchGenerateAudio(scriptId, voice, options, shotIds, voiceMap);
 
     res.json({ 
       success: true, 

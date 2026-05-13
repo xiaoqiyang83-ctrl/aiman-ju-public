@@ -456,18 +456,25 @@ async function getAudioDuration(filePath) {
  * @param {Object} options - 可选参数
  * @returns {Promise<Object>} 批量生成结果
  */
-async function batchGenerateAudio(scriptId, defaultVoice = 'zh-CN-XiaoxiaoNeural', options = {}) {
+async function batchGenerateAudio(scriptId, defaultVoice = 'zh-CN-XiaoxiaoNeural', options = {}, shotIds = null, voiceMap = {}) {
   // 获取剧本下所有有台词的镜头
-  const shotsRes = await pool.query(
-    `SELECT s.*, c.default_voice_id as char_default_voice, c.default_voice_name as char_default_voice_name,
+  let query = `SELECT s.*, c.default_voice_id as char_default_voice, c.default_voice_name as char_default_voice_name,
             c.name as character_name
      FROM shots s 
      LEFT JOIN characters c ON s.character_id = c.id 
      WHERE s.script_id = $1 
-     AND (s.dialogue IS NOT NULL AND s.dialogue != '' OR s.original_text IS NOT NULL AND s.original_text != '')
-     ORDER BY s.scene_id, s.shot_number`,
-    [scriptId]
-  );
+     AND (s.dialogue IS NOT NULL AND s.dialogue != '' OR s.original_text IS NOT NULL AND s.original_text != '')`;
+  const params = [scriptId];
+  
+  // 如果指定了镜头ID，只处理这些镜头
+  if (Array.isArray(shotIds) && shotIds.length > 0) {
+    query += ` AND s.id = ANY($2)`;
+    params.push(shotIds);
+  }
+  
+  query += ` ORDER BY s.scene_id, s.shot_number`;
+  
+  const shotsRes = await pool.query(query, params);
 
   const shots = shotsRes.rows;
   const results = {
@@ -481,8 +488,8 @@ async function batchGenerateAudio(scriptId, defaultVoice = 'zh-CN-XiaoxiaoNeural
 
   for (const shot of shots) {
     try {
-      // 使用角色绑定的默认音色或指定音色
-      const voice = shot.char_default_voice || defaultVoice;
+      // 音色优先级：shotVoiceMap指定 > 角色绑定音色 > 默认音色
+      const voice = voiceMap[shot.id] || shot.char_default_voice || defaultVoice;
       const result = await generateShotAudio(shot.id, voice, options);
       results.success++;
       results.details.push({ shotId: shot.id, status: 'success', ...result });
