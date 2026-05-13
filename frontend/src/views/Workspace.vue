@@ -5960,6 +5960,8 @@ const handleMoveShot = async (scene, shot, direction) => {
 /* 音频相关 */
 .audio-content {
   overflow-y: auto;
+  padding: 12px 16px 12px 24px;
+  font-size: 13px;
 }
 
 .audio-sub-tabs {
