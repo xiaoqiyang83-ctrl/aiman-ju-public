@@ -3181,7 +3181,7 @@ const handleGenShotImage = async (shot) => {
     // 视觉连续性：检查上一镜头是否有图片
     const visualContinuityPrompt = await getVisualContinuityPrompt(shot)
     
-    const response = await imagesAPI.generateShot(shot.id, { visualContinuityPrompt, size: IMAGE_SIZE_MAP[shotImageSize.value]?.value || '1344x768' })
+    const response = await imagesAPI.generateShot(shot.id, { visualContinuityPrompt, size: IMAGE_SIZE_MAP[getShotImageSize(shot.id)]?.value || '1344x768' })
     if (response.success && response.imageUrl) {
       ElMessage.success('分镜图片生成成功！')
       // 更新镜头数据
@@ -3458,7 +3458,7 @@ const handleBatchGenerateImages = async () => {
       // 获取视觉连续性提示词
       const visualContinuityPrompt = await getVisualContinuityPrompt(shot)
       
-      const response = await imagesAPI.generateShot(shot.id, { visualContinuityPrompt, size: IMAGE_SIZE_MAP[shotImageSize.value]?.value || '1344x768' })
+      const response = await imagesAPI.generateShot(shot.id, { visualContinuityPrompt, size: IMAGE_SIZE_MAP[getShotImageSize(shot.id)]?.value || '1344x768' })
       if (response.success && response.imageUrl) {
         shot.scene_image_url = response.imageUrl
         const shotIndex = scene.shots.findIndex(s => s.id === shot.id)
