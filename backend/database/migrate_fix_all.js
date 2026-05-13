@@ -42,6 +42,8 @@ async function migrate() {
       ['job_id', 'VARCHAR(100)'],
       ['image_size', 'VARCHAR(50)'],
       ['visual_prompt', 'TEXT'],
+      ['lip_sync_status', 'VARCHAR(20) DEFAULT \'pending\''],
+      ['lip_sync_video_url', 'VARCHAR(500)'],
     ];
     for (const [col, type] of shotsColumns) {
       try {
