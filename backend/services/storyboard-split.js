@@ -557,28 +557,45 @@ function generateVisualPrompt(shotType, contentPart, sceneContext, movement, opt
 function buildDialogueShotPlan(template, beats, maxShots) {
   const safeBeats = Array.isArray(beats) ? beats.filter(b => String(b.text || '').trim()) : [];
   const plan = [];
-  const establishText = safeBeats.slice(0, 2).map(b => b.text).join('\n');
-  plan.push({ shotType: template.shots[0], movement: template.movements[0], duration: template.durations[0], text: establishText, speaker: '', role: 'establish' });
 
-  const remaining = Math.max(0, maxShots - 2);
-  const usableBeats = safeBeats.slice(0, remaining);
-  for (let i = 0; i < usableBeats.length; i++) {
-    const b = usableBeats[i];
+  // 建立镜头：场景环境描述（不含台词）
+  const envBeats = safeBeats.filter(b => !b.quote);
+  if (envBeats.length > 0) {
+    plan.push({ shotType: template.shots[0], movement: template.movements[0], duration: template.durations[0], text: envBeats.map(b => b.text).join('\n'), speaker: '', role: 'establish' });
+  }
+
+  // 每个台词beat独立成一个镜头，同一说话人连续多句可合并
+  const dialogueBeats = safeBeats.filter(b => b.quote);
+  let i = 0;
+  while (i < dialogueBeats.length && plan.length < maxShots - 1) {
+    const b = dialogueBeats[i];
     const isVO = /\bVO\b|\bOS\b/i.test(String(b.mode || ''));
     const hasSpeaker = !!String(b.speaker || '').trim();
+
+    // 同一说话人连续的台词合并到一个镜头
+    let combinedText = b.text;
+    let combinedSpeaker = b.speaker || '';
+    while (i + 1 < dialogueBeats.length && dialogueBeats[i + 1].speaker === combinedSpeaker) {
+      i++;
+      combinedText += '\n' + dialogueBeats[i].text;
+    }
+
     const shotType = (() => {
       if (!hasSpeaker || isVO) return '全景';
-      if (i === 0) return '中景';
-      if (i % 3 === 0) return '中景';
+      if (plan.length <= 1) return '中景';
+      if (plan.length % 3 === 0) return '中景';
       return '近景';
     })();
     const movement = shotType === '近景' ? 'push_in' : 'static';
-    plan.push({ shotType, movement, duration: 3, text: b.text, speaker: b.speaker || '', role: 'beat' });
-    if (plan.length >= maxShots - 1) break;
+    plan.push({ shotType, movement, duration: 3, text: combinedText, speaker: combinedSpeaker, role: 'beat' });
+    i++;
   }
 
-  const closingText = (safeBeats[safeBeats.length - 1]?.text || establishText || '');
-  plan.push({ shotType: template.shots[4] || '中景', movement: template.movements[4] || 'static', duration: template.durations[4] || 4, text: closingText, speaker: '', role: 'closing' });
+  // 收尾镜头
+  if (plan.length < maxShots) {
+    const closingText = safeBeats[safeBeats.length - 1]?.text || '';
+    plan.push({ shotType: template.shots[4] || '中景', movement: template.movements[4] || 'static', duration: template.durations[4] || 4, text: closingText, speaker: '', role: 'closing' });
+  }
   return plan.slice(0, maxShots);
 }
 

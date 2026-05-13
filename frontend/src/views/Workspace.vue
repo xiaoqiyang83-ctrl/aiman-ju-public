@@ -4314,7 +4314,7 @@ const handleApplyBGM = async () => {
     })
     
     await audioAPI.applyBgm({
-      scene_id: currentScene.value?.id || 0,
+      scene_id: currentScene.value?.id || scenes.value[0]?.id,
       bgm_id: selectedBGM.value.id,
       volume: bgmVolume.value
     })
@@ -4364,7 +4364,7 @@ const handleApplySFX = async () => {
     })
     
     await audioAPI.applySfx({
-      scene_id: currentScene.value?.id || 0,
+      scene_id: currentScene.value?.id || scenes.value[0]?.id,
       sfx_id: selectedSFX.value.id,
       volume: sfxVolume.value
     })
