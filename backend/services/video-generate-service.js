@@ -324,8 +324,8 @@ async function generateShotVideo(shotId, options = {}) {
 
   const shot = shotResult.rows[0];
 
-  // 获取首帧图URL
-  const imageUrl = shot.scene_image_url;
+  // 获取首帧图URL（优先用scene_image_url，没有则fallback到reference_image_url）
+  const imageUrl = shot.scene_image_url || shot.reference_image_url;
 
   if (!imageUrl) {
     throw new Error('镜头没有首帧图，请先生成分镜图片');

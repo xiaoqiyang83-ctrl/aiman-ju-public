@@ -430,7 +430,8 @@
                       <!-- 缩略图区域 -->
                       <div class="shot-thumb-enhanced">
                         <el-image v-if="shot.thumbnail || shot.video_url || shot.result_url" :src="getAssetUrl(shot.thumbnail || shot.video_url || shot.result_url)" fit="cover" :preview-src-list="[getAssetUrl(shot.thumbnail || shot.video_url || shot.result_url)]" preview-teleported class="shot-preview-image" />
-                        <el-image v-else-if="shot.scene_image_url" :src="getAssetUrl(shot.scene_image_url)" fit="cover" :preview-src-list="[getAssetUrl(shot.scene_image_url)]" preview-teleported alt="场景参考图" class="shot-ref-image-thumb shot-preview-image" />
+                        <el-image v-else-if="shot.scene_image_url" :src="getAssetUrl(shot.scene_image_url)" fit="cover" :preview-src-list="[getAssetUrl(shot.scene_image_url)]" preview-teleported alt="AI生成图" class="shot-ref-image-thumb shot-preview-image" />
+                        <el-image v-else-if="shot.reference_image_url" :src="getAssetUrl(shot.reference_image_url)" fit="cover" :preview-src-list="[getAssetUrl(shot.reference_image_url)]" preview-teleported alt="场景参考图" class="shot-ref-image-thumb shot-preview-image" />
                         <div v-else class="thumb-placeholder-enhanced">
                           <el-icon :size="32"><VideoPlay /></el-icon>
                           <span>暂无预览</span>
@@ -1397,13 +1398,13 @@
               :auto-upload="false"
               :on-change="handleShotDetailRefChange"
             >
-              <img v-if="currentShot.scene_image_url" :src="getAssetUrl(currentShot.scene_image_url)" class="shot-ref-preview-img" />
+              <el-image v-if="currentShot.reference_image_url" :src="getAssetUrl(currentShot.reference_image_url)" fit="cover" :preview-src-list="[getAssetUrl(currentShot.reference_image_url)]" preview-teleported class="shot-ref-preview-img" />
               <div v-else class="shot-ref-upload-placeholder">
                 <el-icon><Plus /></el-icon>
                 <span>上传场景参考图</span>
               </div>
             </el-upload>
-            <el-button v-if="currentShot.scene_image_url" type="danger" link @click="currentShot.scene_image_url = ''">清除</el-button>
+            <el-button v-if="currentShot.reference_image_url" type="danger" link @click="currentShot.reference_image_url = ''">清除</el-button>
           </div>
         </el-form-item>
       </el-form>
@@ -3960,7 +3961,7 @@ const handleDeleteShotFromDialog = async () => {
 const handleShotDetailRefChange = (file) => {
   const reader = new FileReader()
   reader.onload = (e) => {
-    currentShot.value.scene_image_url = e.target.result
+    currentShot.value.reference_image_url = e.target.result
     // 自动保存到数据库
     handleSaveShot()
   }
@@ -3972,8 +3973,8 @@ const handleShotRefUpload = (file, shot) => {
   reader.onload = async (e) => {
     const base64Image = e.target.result
     try {
-      await shotsAPI.update(shot.id, { scene_image_url: base64Image })
-      shot.scene_image_url = base64Image
+      await shotsAPI.update(shot.id, { reference_image_url: base64Image })
+      shot.reference_image_url = base64Image
       ElMessage.success('场景参考图上传成功')
     } catch (err) {
       console.error('上传场景参考图失败:', err)
@@ -3994,7 +3995,11 @@ const handleSaveShot = async () => {
       camera_movement: currentShot.value.camera_movement,
       visual_description: currentShot.value.visual_description,
       dialogue: currentShot.value.dialogue,
-      duration: currentShot.value.duration
+      duration: currentShot.value.duration,
+      character_id: currentShot.value.character_id,
+      character_angle: currentShot.value.character_angle,
+      scene_image_url: currentShot.value.scene_image_url,
+      reference_image_url: currentShot.value.reference_image_url
     })
     showShotDetailDialog.value = false
     ElMessage.success('分镜保存成功')
@@ -5725,7 +5730,7 @@ const handleMoveShot = async (scene, shot, direction) => {
   font-size: 12px;
 }
 
-/* 悬停遮罩：默认不拦截点击，避免遮挡卡片打开编辑；悬停时再接收事件 */
+/* 悬停遮罩：始终不拦截点击事件，让图片预览和卡片点击能正常工作 */
 .shot-overlay {
   position: absolute;
   top: 0;
@@ -5743,7 +5748,6 @@ const handleMoveShot = async (scene, shot, direction) => {
 
 .shot-card-enhanced:hover .shot-overlay {
   opacity: 1;
-  pointer-events: auto;
 }
 
 .shot-index {
