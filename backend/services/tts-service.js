@@ -5,11 +5,12 @@
 // ========================================
 
 const { pool } = require('../shared');
-const { exec } = require('child_process');
+const { exec, execFile } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const { promisify } = require('util');
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 // TTS Provider类型
 const TTS_PROVIDER = {
@@ -195,22 +196,28 @@ async function synthesizeEdgeTTS(text, voice, outputPath, options = {}) {
     fs.mkdirSync(dir, { recursive: true });
   }
 
-  // 如果有情感参数，合并到rate/pitch/volume参数中（edge-tts不支持--ssml）
-  let cmd;
+  // 清理文本：去除换行符（命令行不支持多行文本）
+  let cleanText = text.replace(/\n/g, ' ').replace(/\r/g, '').trim();
+
+  // 构建edge-tts参数数组（用execFile避免命令行转义问题）
+  const args = ['--text', cleanText, '--voice', voice, '--write-media', outputPath];
+
+  // 如果有情感参数，合并到rate/pitch/volume
   if (emotion && EMOTION_PARAMS[emotion]) {
     const emotionParams = EMOTION_PARAMS[emotion];
-    const finalRate = options.rate || emotionParams.rate || '+0%';
-    const finalPitch = options.pitch || emotionParams.pitch || '+0Hz';
-    const finalVolume = options.volume || emotionParams.volume || '+0%';
-    cmd = `edge-tts --text "${text.replace(/"/g, '\\"')}" --voice ${voice} --rate ${finalRate} --volume ${finalVolume} --pitch ${finalPitch} --write-media "${outputPath}"`;
+    args.push('--rate', options.rate || emotionParams.rate || '+0%');
+    args.push('--volume', options.volume || emotionParams.volume || '+0%');
+    args.push('--pitch', options.pitch || emotionParams.pitch || '+0Hz');
   } else {
-    cmd = `edge-tts --text "${text.replace(/"/g, '\\"')}" --voice ${voice} --rate ${rate} --volume ${volume} --pitch ${pitch} --write-media "${outputPath}"`;
+    args.push('--rate', rate);
+    args.push('--volume', volume);
+    args.push('--pitch', pitch);
   }
 
-  console.log('[TTS] 开始生成配音 (Edge):', { text: text.substring(0, 50), voice, outputPath });
+  console.log('[TTS] 开始生成配音 (Edge):', { text: cleanText.substring(0, 50), voice, outputPath });
 
   try {
-    const { stdout, stderr } = await execAsync(cmd, { timeout: 60000 });
+    const { stdout, stderr } = await execFileAsync('edge-tts', args, { timeout: 60000 });
     if (stderr) {
       console.log('[TTS] edge-tts stderr:', stderr);
     }
