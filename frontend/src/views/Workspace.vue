@@ -624,6 +624,18 @@
                   拼接所有镜头
                 </el-button>
               </div>
+              <!-- 视频预览区 -->
+              <div v-if="previewVideoUrl" class="video-preview-bar">
+                <video :src="previewVideoUrl" controls class="preview-video-player"></video>
+                <el-button size="small" @click="previewVideoUrl = ''">关闭</el-button>
+              </div>
+              <!-- 导出结果区 -->
+              <div v-if="exportResultUrl" class="export-result-bar">
+                <span>拼接完成：</span>
+                <video :src="exportResultUrl" controls class="export-video-player"></video>
+                <a :href="exportResultUrl" download class="el-button el-button--primary el-button--small">下载</a>
+                <el-button size="small" @click="exportResultUrl = ''">关闭</el-button>
+              </div>
               <div v-loading="loadingVideos" class="video-list">
                 <el-table
                   :data="videoList"
@@ -1942,6 +1954,11 @@ const startPollingExport = () => {
           isExporting.value = false
           if (exportStatus.status === 'completed') {
             ElMessage.success('导出完成，可下载成片')
+            if (exportStatus.downloadUrl) {
+              exportResultUrl.value = exportStatus.downloadUrl
+            } else if (exportStatus.filePath) {
+              exportResultUrl.value = getAssetUrl(exportStatus.filePath)
+            }
           } else {
             ElMessage.error('导出失败，请稍后重试')
           }
@@ -2236,6 +2253,8 @@ const loadingVideos = ref(false)
 const videoList = ref([])
 const videoListKey = ref('')
 const selectedVideos = ref([])
+const previewVideoUrl = ref('')
+const exportResultUrl = ref('')
 
 // ==================== 音频相关 ====================
 // 音频库相关
@@ -4174,10 +4193,7 @@ const showVideoPlayer = ref(false)
 
 const handlePreviewVideo = (row) => {
   if (row.video_url || row.result_url) {
-    selectedCharacter.value = null  // 清除角色详情
-    currentPreviewVideo.value = row
-    showVideoPlayer.value = true
-    ElMessage.info('点击视频预览区域播放视频')
+    previewVideoUrl.value = getAssetUrl(row.video_url || row.result_url)
   } else {
     ElMessage.warning('暂无视频文件')
   }
@@ -5945,6 +5961,25 @@ const handleMoveShot = async (scene, shot, direction) => {
   flex: 1;
   padding: 16px;
   overflow-y: auto;
+}
+
+.video-preview-bar,
+.export-result-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #f5f7fa;
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+
+.preview-video-player,
+.export-video-player {
+  max-width: 320px;
+  max-height: 180px;
+  border-radius: 6px;
+  background: #000;
 }
 
 .desc-text {
