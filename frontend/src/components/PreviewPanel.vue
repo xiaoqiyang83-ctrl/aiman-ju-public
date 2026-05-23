@@ -79,22 +79,24 @@
               <!-- 镜头详情展示 -->
               <div v-if="currentShot" class="shot-details-box">
                 <div class="detail-item">
-                  <span class="detail-label">景别:</span>
+                  <span class="detail-label">景别：</span>
                   <el-tag size="small" type="info">{{ currentShot.shot_type || '中景' }}</el-tag>
-                  <span class="detail-label" style="margin-left: 15px">运镜:</span>
+                  <span class="detail-label" style="margin-left: 15px">运镜：</span>
                   <el-tag size="small" type="warning">{{ currentShot.camera_movement || '固定' }}</el-tag>
+                  <span class="detail-label" style="margin-left: 15px">时长：</span>
+                  <span class="detail-value">{{ currentShot.duration || 3 }}秒</span>
                 </div>
                 <div class="detail-item">
-                  <span class="detail-label">画面描述:</span>
+                  <span class="detail-label">画面描述：</span>
                   <p class="detail-text">{{ currentShot.visual_description || '暂无描述' }}</p>
                 </div>
                 <div v-if="currentShot.dialogue" class="detail-item">
-                  <span class="detail-label">台词:</span>
+                  <span class="detail-label">台词：</span>
                   <p class="detail-text dialogue">"{{ currentShot.dialogue }}"</p>
                 </div>
                 <!-- 展示配音信息 -->
                 <div v-if="currentShot.audio_url" class="detail-item">
-                  <span class="detail-label">配音:</span>
+                  <span class="detail-label">配音：</span>
                   <div class="voice-info">
                     <el-tag size="small" type="success">已生成</el-tag>
                     <el-button size="small" link type="primary" @click="playAudioPreview(currentShot.audio_url)">

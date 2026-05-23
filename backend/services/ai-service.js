@@ -499,6 +499,9 @@ const STORYBOARD_SYSTEM_PROMPT = `你是一位资深的漫剧分镜师，擅长�
 - 优先级：台词完整性 > 镜头数量。宁可多加镜头，也不能遗漏台词
 - 空镜头（远景交代环境、转场）可以没有dialogue，但对话镜头必须包含完整台词
 - 一句台词只出现在一个镜头中，不要拆分也不要重复
+- **严禁将多句台词堆在一个镜头里**！每句对话必须独占一个镜头，这是硬性规则
+- dialogue字段格式必须为"@角色名：台词内容"，必须标注说话人角色名
+- 如果原文是"张三：你好"，dialogue必须填"@张三：你好"，不能只填"你好"
 
 【严禁模板化输出】
 - 相邻镜头的光影、色彩、构图必须不同！禁止所有镜头用相同的光影/色彩/构图
@@ -635,25 +638,88 @@ const TIME_OF_DAY_MAP = {
 
 /**
  * 编译首帧提示词（用于生成静态图片）
+ * v6.1: 从visual_prompt结构化字段编译完整英文提示词，解决图片和描述不一致的问题
  */
 function compileImagePrompt(shot, scene, characters) {
     characters = characters || [];
     var parts = [];
     
+    // 1. 景别
     var shotTypeInfo = SHOT_TYPE_MAP[shot.shot_type] || SHOT_TYPE_MAP['中景'];
     parts.push(shotTypeInfo.promptToken);
     
+    // 2. 角色视觉特征
     if (characters.length > 0) {
-        parts.push(characters.map(function(c) { return c.visualTraits || c.name; }).join(', '));
+        var charDescs = [];
+        for (var ci = 0; ci < characters.length; ci++) {
+            var c = characters[ci];
+            if (c.visualTraits) {
+                charDescs.push(c.visualTraits);
+            } else if (c.name) {
+                charDescs.push(c.name);
+            }
+        }
+        if (charDescs.length > 0) {
+            parts.push(charDescs.join(', '));
+        }
     }
     
-    if (shot.visual_prompt) {
-        parts.push(shot.visual_prompt);
+    // 3. 从visual_prompt结构化字段提取（核心修复）
+    var vp = shot.visual_prompt;
+    if (vp && typeof vp === 'object') {
+        // 场景描述（最重要，放在前面）
+        if (vp.scene_description) {
+            parts.push(vp.scene_description);
+        }
+        // 光影
+        if (vp.lighting) {
+            parts.push(vp.lighting);
+        }
+        // 色彩
+        if (vp.color_palette) {
+            parts.push(vp.color_palette);
+        }
+        // 角色位置/动作
+        if (vp.character_placement) {
+            parts.push(vp.character_placement);
+        }
+        // 面部细节
+        if (vp.facial_detail) {
+            parts.push(vp.facial_detail);
+        }
+        // 构图
+        if (vp.composition) {
+            parts.push(vp.composition);
+        }
+    } else if (vp && typeof vp === 'string' && vp.trim()) {
+        // 兼容旧格式：直接是字符串
+        parts.push(vp);
     }
     
+    // 4. 动作提示词
+    var ap = shot.action_prompt;
+    if (ap && typeof ap === 'object') {
+        if (ap.physical_action) {
+            parts.push(ap.physical_action);
+        }
+    }
+    
+    // 5. 情绪提示词
+    var ec = shot.emotion_cue;
+    if (ec && typeof ec === 'object') {
+        if (ec.primary_emotion) {
+            parts.push(ec.primary_emotion + ' mood');
+        }
+        if (ec.visual_mapping) {
+            parts.push(ec.visual_mapping);
+        }
+    }
+    
+    // 6. 时间/光线
     var timeInfo = TIME_OF_DAY_MAP[scene.time_of_day] || TIME_OF_DAY_MAP['日内'];
     parts.push(timeInfo.light + ', ' + timeInfo.mood);
     
+    // 7. 画质标签
     parts.push('high quality, detailed, cinematic composition');
     
     return parts.filter(Boolean).join(', ');
@@ -1128,6 +1194,479 @@ function normalizeStoryboard(data) {
     return data;
 }
 
+// ==================== Director Rule Engine（导演规则引擎）====================
+
+/**
+ * 导演规则引擎 - 对LLM输出的分镜JSON进行确定性修正
+ * 解决LLM常见问题：全给中景、爽点不强化、情绪和镜头不匹配等
+ */
+
+/**
+ * 情绪→镜头映射规则表
+ * 愤怒 → 特写/大特写, 推镜头, 高对比红/橙色
+ * 绝望 → 远景/全景, 拉镜头, 冷蓝色低对比
+ * 震惊 → 近景/特写, 快速推镜, 高对比
+ * 恐惧 → 近景, 推镜头, 暗调冷色
+ * 悲伤 → 中景/远景, 慢拉, 低对比冷蓝
+ * 喜悦 → 中景/近景, 轻推, 暖色高调
+ * 压迫 → 特写, 慢推, 暗调
+ */
+var EMOTION_SHOT_RULES = {
+    '愤怒': {
+        shot_type: ['特写', '大特写'],
+        camera_movement: '推镜头',
+        light: '高对比红/橙色'
+    },
+    '绝望': {
+        shot_type: ['远景', '全景'],
+        camera_movement: '拉镜头',
+        light: '冷蓝色低对比'
+    },
+    '震惊': {
+        shot_type: ['近景', '特写'],
+        camera_movement: '快速推镜',
+        light: '高对比'
+    },
+    '恐惧': {
+        shot_type: ['近景'],
+        camera_movement: '推镜头',
+        light: '暗调冷色'
+    },
+    '悲伤': {
+        shot_type: ['中景', '远景'],
+        camera_movement: '慢拉',
+        light: '低对比冷蓝'
+    },
+    '喜悦': {
+        shot_type: ['中景', '近景'],
+        camera_movement: '轻推',
+        light: '暖色高调'
+    },
+    '压迫': {
+        shot_type: ['特写'],
+        camera_movement: '慢推',
+        light: '暗调'
+    }
+};
+
+/**
+ * 爽点检测关键词模式
+ * 觉醒（抬头/睁眼/站起来/站起/觉醒/苏醒）→ 大特写, 仰视, 慢推, duration: 4
+ * 反杀（一刀/击败/赢了/反杀/斩/杀）→ 特写, 跟镜头, duration: 2
+ * 打脸（哼/冷笑/你算什么/不过如此/不值一提）→ 大特写, 仰视, duration: 3
+ * 威压（气息/压迫/跪下/颤抖/跪/臣服）→ 特写, 推镜头, duration: 3
+ * 装逼（慢慢/淡然/无所谓/轻轻/随意/微笑）→ 近景, 侧视, 环绕, duration: 4
+ */
+var POWER_UP_PATTERNS = [
+    {
+        name: '觉醒',
+        keywords: ['抬头', '睁眼', '站起来', '站起', '觉醒', '苏醒', '爆发', '力量觉醒'],
+        overrides: {
+            shot_type: '大特写',
+            camera_angle: '仰视',
+            camera_movement: '慢推',
+            duration: 4
+        }
+    },
+    {
+        name: '反杀',
+        keywords: ['一刀', '击败', '赢了', '反杀', '斩', '杀', '击溃', '打败'],
+        overrides: {
+            shot_type: '特写',
+            camera_movement: '跟镜头',
+            duration: 2
+        }
+    },
+    {
+        name: '打脸',
+        keywords: ['哼', '冷笑', '你算什么', '不过如此', '不值一提', '可笑', '不自量力'],
+        overrides: {
+            shot_type: '大特写',
+            camera_angle: '仰视',
+            duration: 3
+        }
+    },
+    {
+        name: '威压',
+        keywords: ['气息', '压迫', '跪下', '颤抖', '跪', '臣服', '恐惧', '战栗'],
+        overrides: {
+            shot_type: '特写',
+            camera_movement: '推镜头',
+            duration: 3
+        }
+    },
+    {
+        name: '装逼',
+        keywords: ['慢慢', '淡然', '无所谓', '轻轻', '随意', '微笑', '淡淡', '平静'],
+        overrides: {
+            shot_type: '近景',
+            camera_angle: '侧视',
+            camera_movement: '环绕',
+            duration: 4
+        }
+    }
+];
+
+/**
+ * 景别等级表（从远到近）
+ */
+var SHOT_LEVELS = ['远景', '全景', '中远景', '中景', '中近景', '近景', '特写', '大特写'];
+
+/**
+ * 获取景别等级索引
+ */
+function getShotLevelIndex(shotType) {
+    var idx = SHOT_LEVELS.indexOf(shotType);
+    return idx >= 0 ? idx : 4; // 默认返回中景的索引
+}
+
+/**
+ * 升降景别（指定shot_type）
+ * @param {string} currentType - 当前景别
+ * @param {number} direction - 1=升级（更近）, -1=降级（更远）
+ */
+function adjustShotLevel(currentType, direction) {
+    var idx = getShotLevelIndex(currentType);
+    var newIdx = idx + direction;
+    if (newIdx < 0) newIdx = 0;
+    if (newIdx >= SHOT_LEVELS.length) newIdx = SHOT_LEVELS.length - 1;
+    return SHOT_LEVELS[newIdx];
+}
+
+/**
+ * 深拷贝对象（用于避免修改原始数据）
+ */
+function deepClone(obj) {
+    if (obj === null || typeof obj !== 'object') {
+        return obj;
+    }
+    if (Array.isArray(obj)) {
+        var arr = [];
+        for (var i = 0; i < obj.length; i++) {
+            arr.push(deepClone(obj[i]));
+        }
+        return arr;
+    }
+    var copy = {};
+    var keys = Object.keys(obj);
+    for (var k = 0; k < keys.length; k++) {
+        copy[keys[k]] = deepClone(obj[keys[k]]);
+    }
+    return copy;
+}
+
+/**
+ * 检测爽点关键词
+ * @param {Object} shot - 镜头对象
+ * @returns {Object|null} - 命中的爽点模式或null
+ */
+function detectPowerUp(shot) {
+    var text = '';
+    if (shot.dialogue) text += shot.dialogue;
+    if (shot.original_text) text += shot.original_text;
+    if (shot.action_prompt && shot.action_prompt.physical_action) {
+        text += shot.action_prompt.physical_action;
+    }
+    
+    text = String(text).toLowerCase();
+    
+    for (var i = 0; i < POWER_UP_PATTERNS.length; i++) {
+        var pattern = POWER_UP_PATTERNS[i];
+        for (var j = 0; j < pattern.keywords.length; j++) {
+            if (text.indexOf(pattern.keywords[j]) >= 0) {
+                console.log('[Director Engine] 检测到爽点: ' + pattern.name + ' (关键词: ' + pattern.keywords[j] + ')');
+                return pattern;
+            }
+        }
+    }
+    return null;
+}
+
+/**
+ * 应用情绪→镜头映射规则
+ * @param {Object} shot - 镜头对象
+ */
+function applyEmotionMapping(shot) {
+    var emotion = shot.emotion_cue && shot.emotion_cue.primary_emotion;
+    if (!emotion) return;
+    
+    var rule = EMOTION_SHOT_RULES[emotion];
+    if (!rule) return;
+    
+    // 如果当前不是目标景别，进行映射
+    if (rule.shot_type.indexOf(shot.shot_type) < 0) {
+        // 随机选择一个目标景别
+        var targetShot = rule.shot_type[Math.floor(Math.random() * rule.shot_type.length)];
+        console.log('[Director Engine] 情绪映射: ' + emotion + ' → ' + targetShot);
+        shot.shot_type = targetShot;
+    }
+    
+    // 映射运镜（覆盖"固定"这种无意义的默认值）
+    if (rule.camera_movement && (!shot.camera_movement || shot.camera_movement === '固定')) {
+        console.log('[Director Engine] 情绪运镜映射: ' + emotion + ' → ' + rule.camera_movement);
+        shot.camera_movement = rule.camera_movement;
+    }
+    
+    // 映射灯光（覆盖空值或过于笼统的描述）
+    if (rule.light && shot.visual_prompt) {
+        var currentLight = shot.visual_prompt.lighting || '';
+        if (!currentLight || currentLight === '自然光' || currentLight === '室内光') {
+            console.log('[Director Engine] 情绪灯光映射: ' + emotion + ' → ' + rule.light);
+            shot.visual_prompt.lighting = rule.light;
+        }
+    }
+}
+
+/**
+ * 应用爽点强化规则（优先级高于情绪映射）
+ * @param {Object} shot - 镜头对象
+ */
+function applyPowerUpEnhancement(shot) {
+    var powerUp = detectPowerUp(shot);
+    if (!powerUp) return;
+    
+    var overrides = powerUp.overrides;
+    if (overrides.shot_type) {
+        console.log('[Director Engine] 爽点强化: ' + powerUp.name + ' → ' + overrides.shot_type);
+        shot.shot_type = overrides.shot_type;
+    }
+    if (overrides.camera_angle) {
+        shot.camera_angle = overrides.camera_angle;
+    }
+    if (overrides.camera_movement) {
+        shot.camera_movement = overrides.camera_movement;
+    }
+    if (overrides.duration) {
+        shot.duration = overrides.duration;
+    }
+}
+
+/**
+ * 检查并修正景别多样性
+ * @param {Array} shots - 镜头数组
+ */
+function fixShotTypeDiversity(shots) {
+    if (!shots || shots.length < 3) return;
+    
+    var shotTypes = [];
+    for (var i = 0; i < shots.length; i++) {
+        shotTypes.push(shots[i].shot_type);
+    }
+    
+    // 检查连续3个相同景别
+    for (var i = 0; i < shots.length - 2; i++) {
+        if (shotTypes[i] === shotTypes[i + 1] && shotTypes[i + 1] === shotTypes[i + 2]) {
+            console.log('[Director Engine] 检测到连续3个相同景别: ' + shotTypes[i] + ' (位置: ' + (i+1) + '-' + (i+3) + ')');
+            // 升降第2个镜头
+            var currentType = shots[i + 1].shot_type;
+            var midIdx = getShotLevelIndex(currentType);
+            var direction = (midIdx <= 3) ? 1 : -1; // 前半部分升，后半部分降
+            shots[i + 1].shot_type = adjustShotLevel(currentType, direction);
+            console.log('[Director Engine] 强制升降景别: ' + currentType + ' → ' + shots[i + 1].shot_type);
+            shotTypes[i + 1] = shots[i + 1].shot_type;
+        }
+    }
+    
+    // 检查整个scene是否有特写/大特写
+    var hasExtreme = false;
+    for (var i = 0; i < shots.length; i++) {
+        if (shots[i].shot_type === '特写' || shots[i].shot_type === '大特写') {
+            hasExtreme = true;
+            break;
+        }
+    }
+    
+    if (!hasExtreme && shots.length > 0) {
+        // 找到emotion强度最高的shot
+        var maxEmotionIdx = 0;
+        var maxEmotionScore = 0;
+        for (var i = 0; i < shots.length; i++) {
+            var emotion = shots[i].emotion_cue && shots[i].emotion_cue.primary_emotion;
+            var score = emotion ? 1 : 0; // 简化评分
+            if (score > maxEmotionScore) {
+                maxEmotionScore = score;
+                maxEmotionIdx = i;
+            }
+        }
+        console.log('[Director Engine] scene缺少特写，为emotion最强shot添加特写');
+        shots[maxEmotionIdx].shot_type = '特写';
+    }
+    
+    // 检查整个scene是否有远景/全景
+    var hasWide = false;
+    for (var i = 0; i < shots.length; i++) {
+        if (shots[i].shot_type === '远景' || shots[i].shot_type === '全景') {
+            hasWide = true;
+            break;
+        }
+    }
+    
+    if (!hasWide && shots.length > 0) {
+        console.log('[Director Engine] scene缺少远景/全景，将第一个shot改为远景');
+        shots[0].shot_type = '远景';
+    }
+}
+
+/**
+ * 检查并修正运镜多样性
+ * @param {Array} shots - 镜头数组
+ */
+function fixCameraMovementDiversity(shots) {
+    if (!shots || shots.length < 3) return;
+    
+    var movements = [];
+    for (var i = 0; i < shots.length; i++) {
+        movements.push(shots[i].camera_movement);
+    }
+    
+    // 检查连续3个相同运镜
+    for (var i = 0; i < shots.length - 2; i++) {
+        if (movements[i] === movements[i + 1] && movements[i + 1] === movements[i + 2]) {
+            console.log('[Director Engine] 检测到连续3个相同运镜: ' + movements[i] + ' (位置: ' + (i+1) + '-' + (i+3) + ')');
+            // 改为其他运镜
+            var alternatives = ['推镜头', '移镜头', '摇镜头', '跟镜头'];
+            var currentMov = shots[i + 1].camera_movement;
+            var newMov = currentMov;
+            for (var j = 0; j < alternatives.length; j++) {
+                if (alternatives[j] !== currentMov) {
+                    newMov = alternatives[j];
+                    break;
+                }
+            }
+            shots[i + 1].camera_movement = newMov;
+            console.log('[Director Engine] 强制改变运镜: ' + currentMov + ' → ' + newMov);
+            movements[i + 1] = newMov;
+        }
+    }
+    
+    // 检查整个scene是否全是固定镜头
+    var allFixed = true;
+    for (var i = 0; i < shots.length; i++) {
+        if (shots[i].camera_movement !== '固定') {
+            allFixed = false;
+            break;
+        }
+    }
+    
+    if (allFixed && shots.length >= 2) {
+        console.log('[Director Engine] scene全是固定镜头，修改部分为推镜头/移镜头');
+        // 至少修改2个为动态运镜
+        var modified = 0;
+        for (var i = 1; i < shots.length && modified < 2; i += 2) {
+            if (shots[i].camera_movement === '固定') {
+                shots[i].camera_movement = (modified % 2 === 0) ? '推镜头' : '移镜头';
+                modified++;
+            }
+        }
+    }
+}
+
+/**
+ * 检查并修正duration合理性
+ * @param {Object} shot - 镜头对象
+ * @param {string} shotType - 镜头类型
+ */
+function fixDurationReasonableness(shot, shotType) {
+    var duration = shot.duration;
+    var emotion = shot.emotion_cue && shot.emotion_cue.primary_emotion;
+    
+    // 对话镜头：2-4秒
+    var isDialogue = shot.dialogue && shot.dialogue.trim().length > 0;
+    // 动作镜头：1-3秒
+    var isAction = shot.action_prompt && (
+        shot.action_prompt.physical_action.indexOf('动') >= 0 ||
+        shot.action_prompt.physical_action.indexOf('走') >= 0 ||
+        shot.action_prompt.physical_action.indexOf('跑') >= 0 ||
+        shot.action_prompt.physical_action.indexOf('打') >= 0
+    );
+    // 情绪特写：3-5秒
+    var isEmotionCloseUp = (shotType === '特写' || shotType === '大特写' || shotType === '近景') && emotion;
+    // 远景交代：3-5秒
+    var isWideEstablishing = shotType === '远景' || shotType === '全景';
+    
+    var minDur, maxDur;
+    if (isDialogue) {
+        minDur = 2; maxDur = 4;
+    } else if (isAction) {
+        minDur = 1; maxDur = 3;
+    } else if (isEmotionCloseUp) {
+        minDur = 3; maxDur = 5;
+    } else if (isWideEstablishing) {
+        minDur = 3; maxDur = 5;
+    } else {
+        // 默认值
+        minDur = 2; maxDur = 4;
+    }
+    
+    if (duration < minDur) {
+        console.log('[Director Engine] duration过短: ' + duration + ' → ' + minDur);
+        shot.duration = minDur;
+    } else if (duration > maxDur) {
+        console.log('[Director Engine] duration过长: ' + duration + ' → ' + maxDur);
+        shot.duration = maxDur;
+    }
+}
+
+/**
+ * 主入口：应用导演规则引擎
+ * @param {Object} data - 归一化后的分镜数据
+ * @returns {Object} - 修正后的分镜数据
+ */
+function applyDirectorEngine(data) {
+    console.log('[Director Engine] 开始执行导演规则引擎...');
+    
+    // 深拷贝，避免修改原始数据
+    var processed = deepClone(data);
+    
+    if (!processed || !Array.isArray(processed.scenes)) {
+        console.log('[Director Engine] 无有效scenes数据，跳过');
+        return processed;
+    }
+    
+    for (var si = 0; si < processed.scenes.length; si++) {
+        var scene = processed.scenes[si];
+        console.log('[Director Engine] 处理场景 ' + (si + 1) + ': ' + scene.title);
+        
+        if (!Array.isArray(scene.shots) || scene.shots.length === 0) {
+            console.log('[Director Engine] 场景 ' + (si + 1) + ' 无shots，跳过');
+            continue;
+        }
+        
+        // 第一步：逐个shot应用规则
+        for (var i = 0; i < scene.shots.length; i++) {
+            var shot = scene.shots[i];
+            
+            // 1.1 先检测爽点（优先级最高）
+            applyPowerUpEnhancement(shot);
+            
+            // 1.2 如果没有命中爽点，应用情绪映射
+            if (!detectPowerUp(shot)) {
+                applyEmotionMapping(shot);
+            }
+            
+            // 1.3 修正duration合理性
+            fixDurationReasonableness(shot, shot.shot_type);
+        }
+        
+        // 第二步：场景级别的多样性修正
+        fixShotTypeDiversity(scene.shots);
+        fixCameraMovementDiversity(scene.shots);
+        
+        // 第三步：爽点优先级确保（场景级别修正后重新应用爽点强化）
+        for (var i = 0; i < scene.shots.length; i++) {
+            var shot = scene.shots[i];
+            if (detectPowerUp(shot)) {
+                applyPowerUpEnhancement(shot);
+            }
+        }
+        
+        console.log('[Director Engine] 场景 ' + (si + 1) + ' 处理完成，共 ' + scene.shots.length + ' 个shots');
+    }
+    
+    console.log('[Director Engine] 导演规则引擎执行完毕');
+    return processed;
+}
+
 /**
  * 为每个shot编译三层提示词
  */
@@ -1220,6 +1759,8 @@ async function generateStoryboardFromScript(params) {
     var normalized = normalizeStoryboard(parsed);
     // 自动补全遗漏的台词
     normalized = autoFillDialogue(normalized, dialogueList);
+    // 应用导演规则引擎进行确定性修正
+    normalized = applyDirectorEngine(normalized);
     // 调试日志：检查每个镜头的dialogue输出
     normalized.scenes.forEach(function(s, si) {
         s.shots.forEach(function(sh, shi) {
@@ -1567,6 +2108,7 @@ module.exports = {
     parseJsonWithFallback,
     normalizeStoryboard,
     compilePromptsForStoryboard,
+    applyDirectorEngine,
     SHOT_TYPE_MAP,
     CAMERA_MOVEMENT_MAP,
     TIME_OF_DAY_MAP,
