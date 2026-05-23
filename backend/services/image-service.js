@@ -381,7 +381,26 @@ async function generateShotImage(shotId, visualContinuityPrompt, size) {
   const shot = shotResult.rows[0];
   
   // 使用 image_prompt 或 visual_prompt
-  let prompt = shot.image_prompt || shot.visual_prompt;
+  let prompt = shot.image_prompt;
+  // v7.0.6 修复：优先从visual_prompt_json（JSONB完整数据）编译，而非visual_prompt（简短文本）
+  if (!prompt) {
+    var vpJson = shot.visual_prompt_json;
+    if (vpJson && typeof vpJson === 'object') {
+      prompt = [vpJson.scene_description, vpJson.lighting, vpJson.color_palette, vpJson.character_placement, vpJson.facial_detail, vpJson.composition].filter(Boolean).join(', ');
+    } else if (vpJson && typeof vpJson === 'string') {
+      try {
+        var parsed = JSON.parse(vpJson);
+        prompt = [parsed.scene_description, parsed.lighting, parsed.color_palette, parsed.character_placement, parsed.facial_detail, parsed.composition].filter(Boolean).join(', ');
+      } catch(e) { prompt = vpJson; }
+    } else if (shot.visual_prompt) {
+      if (typeof shot.visual_prompt === 'string') {
+        prompt = shot.visual_prompt;
+      } else if (typeof shot.visual_prompt === 'object') {
+        var vp = shot.visual_prompt;
+        prompt = [vp.scene_description, vp.lighting, vp.color_palette, vp.character_placement, vp.facial_detail, vp.composition].filter(Boolean).join(', ');
+      }
+    }
+  }
   
   if (!prompt) {
     throw new Error('镜头没有图片提示词，请先设置 image_prompt');

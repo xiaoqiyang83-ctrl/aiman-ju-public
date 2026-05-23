@@ -161,9 +161,11 @@ async function regenerateStoryboard({ userId, scriptId }) {
              duration, video_status, status,
              -- v5.3 新增字段
              narration, scene_reference,
-             visual_prompt_json, action_prompt_json, emotion_cue_json
+             visual_prompt_json, action_prompt_json, emotion_cue_json,
+             -- v7.0.6 新增：image_prompt编译后的完整英文提示词
+             image_prompt
            )
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'none','pending',$14,$15,$16,$17,$18)`,
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'none','pending',$14,$15,$16,$17,$18,$19)`,
           [
             sceneRow.id,
             scriptId,
@@ -186,6 +188,8 @@ async function regenerateStoryboard({ userId, scriptId }) {
             JSON.stringify(visualPromptData),
             JSON.stringify(actionPromptData),
             JSON.stringify(emotionCueData),
+            // v7.0.6 image_prompt
+            sh.image_prompt || '',
           ]
         );
       }

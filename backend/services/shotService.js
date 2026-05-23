@@ -127,7 +127,8 @@ async function updateShot({
     updates.push('character_id = $' + paramIndex++);
     values.push(characterId);
   }
-  if (sceneImageUrl !== undefined && sceneImageUrl !== null) {
+  // v7.0.6 修复：空字符串不覆盖已有的图片URL（防止前端保存时把已生成的图片URL清空）
+  if (sceneImageUrl !== undefined && sceneImageUrl !== null && sceneImageUrl !== '') {
     updates.push('scene_image_url = $' + paramIndex++);
     values.push(sceneImageUrl);
   }
@@ -135,7 +136,8 @@ async function updateShot({
     updates.push('character_angle = $' + paramIndex++);
     values.push(characterAngle);
   }
-  if (referenceImageUrl !== undefined && referenceImageUrl !== null) {
+  // v7.0.6 修复：同上，空字符串不覆盖已有的参考图URL
+  if (referenceImageUrl !== undefined && referenceImageUrl !== null && referenceImageUrl !== '') {
     updates.push('reference_image_url = $' + paramIndex++);
     values.push(referenceImageUrl);
   }
