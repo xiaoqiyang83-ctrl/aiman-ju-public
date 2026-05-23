@@ -1039,13 +1039,14 @@ function normalizeStoryboard(data) {
     }
     
     // 台词兜底：如果AI没给dialogue，从场景原文提取并分配
+    // v7.0.3修复：如果超过一半镜头没台词也触发兜底（之前只有全部没台词才触发）
     for (var si = 0; si < data.scenes.length; si++) {
         var scene = data.scenes[si];
         if (!Array.isArray(scene.shots) || !scene.shots.length) continue;
         
         var nonEmptyCount = scene.shots.filter(function(s) { return String(s.dialogue || '').trim(); }).length;
-        // 如果所有镜头都没台词，尝试从场景原文提取
-        if (nonEmptyCount === 0 && scene.content) {
+        // 如果大部分镜头都没台词，尝试从场景原文提取
+        if (nonEmptyCount < scene.shots.length / 2 && scene.content) {
             var dialogues = extractDialoguesFromSceneContent(scene.content);
             if (dialogues.length > 0) {
                 var dIdx = 0;
@@ -1102,11 +1103,18 @@ function extractDialoguesFromSceneContent(content) {
         var line = lines[li];
         if (/^(人物|场景|地点|时间|道具|备注|场次)[：:]/.test(line)) continue;
         if (/^(第.{1,3}集|第.{1,3}场)/.test(line)) continue;
-        // 格式1: 角色：台词
+        // 格式1: 角色：台词 → 保留角色名
         var m1 = line.match(/^(.{1,16}?)(?:\s*[（(]([^)）]+)[)）])?\s*(VO|OS)?\s*[：:]\s*(.+)$/i);
         if (m1) {
+            var speaker = String(m1[1] || '').trim();
+            var osFlag = String(m1[3] || '').toUpperCase();
             var rhs = String(m1[4] || '').trim();
-            if (rhs && rhs.length < 200) { dialogues.push(rhs); continue; }
+            if (rhs && rhs.length < 200) {
+                // 保留角色名标注，格式：@角色名：台词
+                var prefix = osFlag === 'OS' ? '@' + speaker + 'OS：' : '@' + speaker + '：';
+                dialogues.push(prefix + rhs);
+                continue;
+            }
         }
         // 格式2: 【角色】台词
         var m2 = line.match(/^【(.{1,16}?)】\s*(.+)$/);
@@ -2195,9 +2203,9 @@ function applyDescriptionDiversity(scene) {
 
 /**
  * 对重复的字段值进行差异化处理
+ * v7.0.3修复：不再粗暴拼接前缀（导致堆叠），而是替换色温/构图法则等具体参数
  */
 function diversifyFieldValue(shot, field, originalValue, shotIndex) {
-    // 提取可用的差异化信息
     var action = "";
     if (shot.action_prompt && shot.action_prompt.physical_action) {
         action = String(shot.action_prompt.physical_action).trim();
@@ -2207,7 +2215,6 @@ function diversifyFieldValue(shot, field, originalValue, shotIndex) {
     var shotType = shot.shot_type || "";
     var originalText = String(shot.original_text || "").trim();
     
-    // 根据字段类型进行差异化
     if (field === "scene_description") {
         if (action) return action + "，" + originalValue;
         if (dialogue) return originalValue + "（" + dialogue.substring(0, 15) + "）";
@@ -2215,40 +2222,49 @@ function diversifyFieldValue(shot, field, originalValue, shotIndex) {
     }
     
     if (field === "lighting") {
-        var lightMods = ["侧逆光", "顶光", "底光", "轮廓光", "漫射光"];
+        // 替换色温值而非拼接，避免堆叠
         var colorTemps = ["2800K", "3200K", "4000K", "4500K", "5600K", "6500K"];
-        var modIdx = shotIndex % lightMods.length;
+        var lightTypes = ["侧逆光", "顶光", "底光", "轮廓光", "漫射光", "侧顺光"];
         var tempIdx = shotIndex % colorTemps.length;
-        return lightMods[modIdx] + "，色温" + colorTemps[tempIdx] + "，" + originalValue;
+        var typeIdx = shotIndex % lightTypes.length;
+        // 替换原值中的色温
+        var newVal = originalValue.replace(/\d{4}K/, colorTemps[tempIdx]);
+        // 如果原值没有色温，追加
+        if (newVal === originalValue) {
+            newVal = lightTypes[typeIdx] + "，色温" + colorTemps[tempIdx];
+        }
+        return newVal;
     }
     
     if (field === "color_palette") {
-        var colorHints = {
-            "远景": "冷色调为主",
-            "全景": "自然色调",
-            "中景": "中性色调",
-            "近景": "暖色调增强",
-            "特写": "高对比色调",
-            "大特写": "饱和色调"
-        };
-        var hint = colorHints[shotType] || "中性色调";
-        return hint + "，" + originalValue;
+        // 不再拼接前缀，而是微调主色hex值
+        var hexShifts = ["#AED6F1", "#F9E79F", "#D5F5E3", "#FADBD8", "#E8DAEF", "#D6EAF8"];
+        var shiftIdx = shotIndex % hexShifts.length;
+        // 替换第一个hex值
+        var newVal = originalValue.replace(/#[0-9A-Fa-f]{6}/, hexShifts[shiftIdx]);
+        return newVal;
     }
     
     if (field === "composition") {
-        var compAddons = ["前景遮挡", "纵深引导", "框架构图", "留白构图", "动态模糊", "镜像构图"];
-        var addon = compAddons[shotIndex % compAddons.length];
-        return addon + "，" + originalValue;
+        // 替换构图法则而非拼接
+        var compRules = ["三分法构图", "对角线构图", "对称构图", "引导线构图", "框架构图", "留白构图"];
+        var ruleIdx = shotIndex % compRules.length;
+        // 替换原值中的构图法则
+        var newVal = originalValue.replace(/.+构图/, compRules[ruleIdx]);
+        if (newVal === originalValue) {
+            newVal = compRules[ruleIdx] + "，人物位于" + (shotIndex % 2 === 0 ? "左侧" : "右侧") + "交叉点";
+        }
+        return newVal;
     }
     
     if (field === "character_placement") {
-        if (shotType) return shotType + "镜头视角，" + originalValue;
+        if (shotType) return shotType + "视角，" + originalValue.replace(/^(远景|全景|中景|近景|特写|大特写)镜头视角，/, "");
         if (emotion) return emotion + "状态，" + originalValue;
     }
     
     if (field === "facial_detail") {
         if (emotion) return emotion + "表情，" + originalValue;
-        if (dialogue) return "说话时" + originalValue;
+        if (dialogue) return "说话时，" + originalValue;
     }
     
     return originalValue;
