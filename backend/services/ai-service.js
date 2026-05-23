@@ -2580,37 +2580,55 @@ function enforceDialogueFromScript(data, scriptContent) {
     }
     
     // 3. 检验：看AI台词是否跟剧本台词一致
-    // 用模糊匹配：提取台词的纯文本（去掉@角色名、标点），看是否能在剧本台词中找到对应
+    // 匹配策略：精确匹配 > 重合度匹配(>=50%) > 角色名替换 > 删除编造台词
     var usedScriptIdx = {}; // 已被匹配的剧本台词索引
     var matchCount = 0;
     var replaceCount = 0;
+    var deleteCount = 0;
     
     for (var ai = 0; ai < aiDialogues.length; ai++) {
         var aiD = aiDialogues[ai];
         var aiPureText = stripDialogueMarkup(aiD.dialogue);
+        var aiSpeaker = extractSpeakerFromDialogue(aiD.dialogue);
         
-        // 先尝试精确匹配
+        // 先尝试严格匹配：精确相等 或 双向包含且重合度>=50%
         var matched = false;
+        var bestMatchIdx = -1;
+        var bestOverlap = 0;
+        
         for (var si = 0; si < scriptDialogues.length; si++) {
             if (usedScriptIdx[si]) continue;
             var scriptPureText = stripDialogueMarkup(scriptDialogues[si].text);
-            if (scriptPureText === aiPureText || aiPureText.indexOf(scriptPureText) >= 0 || scriptPureText.indexOf(aiPureText) >= 0) {
-                usedScriptIdx[si] = true;
-                matched = true;
-                matchCount++;
-                // 如果角色名不对，修正
-                var correctFormat = '@' + scriptDialogues[si].speaker + '：' + scriptDialogues[si].text;
-                if (data.scenes[aiD.sceneIdx].shots[aiD.shotIdx].dialogue !== correctFormat) {
-                    data.scenes[aiD.sceneIdx].shots[aiD.shotIdx].dialogue = correctFormat;
-                }
+            
+            // 精确匹配
+            if (scriptPureText === aiPureText) {
+                bestMatchIdx = si;
+                bestOverlap = 1.0;
                 break;
+            }
+            
+            // 计算重合度：用短文本在长文本中的占比
+            var overlap = calcTextOverlap(aiPureText, scriptPureText);
+            if (overlap > bestOverlap) {
+                bestOverlap = overlap;
+                bestMatchIdx = si;
+            }
+        }
+        
+        if (bestOverlap >= 0.5 && bestMatchIdx >= 0) {
+            // 匹配成功（重合度>=50%），用剧本原台词替换
+            usedScriptIdx[bestMatchIdx] = true;
+            matched = true;
+            matchCount++;
+            var correctFormat = '@' + scriptDialogues[bestMatchIdx].speaker + '：' + scriptDialogues[bestMatchIdx].text;
+            if (data.scenes[aiD.sceneIdx].shots[aiD.shotIdx].dialogue !== correctFormat) {
+                data.scenes[aiD.sceneIdx].shots[aiD.shotIdx].dialogue = correctFormat;
             }
         }
         
         if (!matched) {
-            // AI编造的台词，在剧本中找不到对应
+            // AI编造的台词，在剧本中找不到对应（重合度<50%）
             // 尝试用角色名匹配找最近一条未匹配的剧本台词
-            var aiSpeaker = extractSpeakerFromDialogue(aiD.dialogue);
             var fallbackMatch = -1;
             for (var si = 0; si < scriptDialogues.length; si++) {
                 if (usedScriptIdx[si]) continue;
@@ -2627,7 +2645,10 @@ function enforceDialogueFromScript(data, scriptContent) {
                 replaceCount++;
                 console.log('[Dialogue Enforce] 替换编造台词: "' + aiD.dialogue.substring(0, 30) + '..." → "' + correctText.substring(0, 30) + '..."');
             } else {
-                console.log('[Dialogue Enforce] 警告：AI台词在剧本中找不到对应: "' + aiD.dialogue.substring(0, 40) + '..."');
+                // 找不到任何对应的剧本台词，直接删除这条编造台词
+                data.scenes[aiD.sceneIdx].shots[aiD.shotIdx].dialogue = '';
+                deleteCount++;
+                console.log('[Dialogue Enforce] 删除编造台词(剧本中不存在): "' + aiD.dialogue.substring(0, 40) + '..."');
             }
         }
     }
@@ -2687,7 +2708,7 @@ function enforceDialogueFromScript(data, scriptContent) {
         }
     }
     
-    console.log('[Dialogue Enforce] 结果: 匹配' + matchCount + '条, 替换' + replaceCount + '条, 补入' + unmatched.length + '条未分配');
+    console.log('[Dialogue Enforce] 结果: 匹配' + matchCount + '条, 替换' + replaceCount + '条, 删除' + deleteCount + '条编造');
     return data;
 }
 
@@ -2755,6 +2776,36 @@ function stripDialogueMarkup(dialogue) {
 function extractSpeakerFromDialogue(dialogue) {
     var m = String(dialogue || '').match(/^[@\uff20]?([\u4e00-\u9fa5]{1,6})[：:]/);
     return m ? m[1] : '';
+}
+
+/**
+ * 计算两个文本的重合度（0-1）
+ * 策略：找最长公共子串，结合子串绝对长度和相对占比综合评分
+ * 防止"报告总部发现S级丧尸"被"丧尸"误匹配
+ */
+function calcTextOverlap(text1, text2) {
+    if (!text1 || !text2) return 0;
+    if (text1 === text2) return 1;
+    
+    var shorter = text1.length <= text2.length ? text1 : text2;
+    var longer = text1.length <= text2.length ? text2 : text1;
+    
+    // 找最长公共子串
+    var maxLen = 0;
+    for (var i = 0; i < shorter.length; i++) {
+        for (var j = i + 1; j <= shorter.length; j++) {
+            var sub = shorter.substring(i, j);
+            if (longer.indexOf(sub) >= 0 && sub.length > maxLen) {
+                maxLen = sub.length;
+            }
+        }
+    }
+    
+    // 公共子串太短不算匹配（<6字基本就是零散词汇碰巧相同）
+    if (maxLen < 6) return 0;
+    
+    // 重合度 = 公共子串长度 / 短文本长度
+    return maxLen / shorter.length;
 }
 
 function extractSceneHeadingsFromScript(scriptContent) {
