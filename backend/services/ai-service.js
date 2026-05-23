@@ -563,7 +563,7 @@ const STORYBOARD_USER_TEMPLATE = `请将以下剧本拆分为结构化JSON。
             "color_palette": "主色XX% #HEX，辅色XX% #HEX，点缀色XX% #HEX",
             "character_placement": "@角色名 位置和朝向",
             "facial_detail": "具体面部表情细节",
-            "scene_description": "环境细节描述",
+            "scene_description": "环境细节描述（必须包含场景地点特征，如工厂农场走廊、废弃医院手术室、荒漠小镇街道）",
             "composition": "构图法则（三分法/对角线/对称/引导线等）"
           },
           
@@ -598,7 +598,8 @@ const STORYBOARD_USER_TEMPLATE = `请将以下剧本拆分为结构化JSON。
 - visual_prompt的composition必须指明构图法则如"三分法构图，人物位于右侧交叉点"
 - action_prompt必须是物理级描述，如"修长的手指缓慢攥紧衣角，指节发白"
 - 角色必须用@引用标记，如@林川、@苏晚
-- 场景用@引用标记，如@废弃车站`;
+- 场景用@引用标记，如@废弃车站
+- visual_prompt的scene_description必须包含场景地点特征，不能只写"走廊"而要写"工厂农场走廊"，不能只写"房间"而要写"废弃医院手术室"，确保生图时能还原场景环境`;
 
 // ==================== 摄影预设映射表 ====================
 
@@ -643,6 +644,12 @@ const TIME_OF_DAY_MAP = {
 function compileImagePrompt(shot, scene, characters) {
     characters = characters || [];
     var parts = [];
+    
+    // 0. 场景环境（核心修复：确保生图知道场景地点）
+    var sceneLocation = String(scene.title || scene.location || '').trim();
+    if (sceneLocation) {
+        parts.push('Setting: ' + sceneLocation);
+    }
     
     // 1. 景别
     var shotTypeInfo = SHOT_TYPE_MAP[shot.shot_type] || SHOT_TYPE_MAP['中景'];
