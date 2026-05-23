@@ -81,44 +81,86 @@ async function updateShot({
   referenceImageUrl,
   trimStart,
   trimEnd,
+  imagePrompt,  // v6.3 新增
 }) {
+  const updates = [];
+  const values = [];
+  let paramIndex = 1;
+
+  if (shotNumber !== undefined && shotNumber !== null) {
+    updates.push('shot_number = $' + paramIndex++);
+    values.push(shotNumber);
+  }
+  if (shotType !== undefined && shotType !== null) {
+    updates.push('shot_type = $' + paramIndex++);
+    values.push(shotType);
+  }
+  if (cameraMovement !== undefined && cameraMovement !== null) {
+    updates.push('camera_movement = $' + paramIndex++);
+    values.push(cameraMovement);
+  }
+  if (visualDescription !== undefined && visualDescription !== null) {
+    updates.push('visual_description = $' + paramIndex++);
+    values.push(visualDescription);
+  }
+  if (visualPrompt !== undefined && visualPrompt !== null) {
+    updates.push('visual_prompt = $' + paramIndex++);
+    values.push(visualPrompt);
+  }
+  if (originalText !== undefined && originalText !== null) {
+    updates.push('original_text = $' + paramIndex++);
+    values.push(originalText);
+  }
+  if (dialogue !== undefined && dialogue !== null) {
+    updates.push('dialogue = $' + paramIndex++);
+    values.push(dialogue);
+  }
+  if (actionDescription !== undefined && actionDescription !== null) {
+    updates.push('action_description = $' + paramIndex++);
+    values.push(actionDescription);
+  }
+  if (duration !== undefined && duration !== null) {
+    updates.push('duration = $' + paramIndex++);
+    values.push(duration);
+  }
+  if (characterId !== undefined && characterId !== null) {
+    updates.push('character_id = $' + paramIndex++);
+    values.push(characterId);
+  }
+  if (sceneImageUrl !== undefined && sceneImageUrl !== null) {
+    updates.push('scene_image_url = $' + paramIndex++);
+    values.push(sceneImageUrl);
+  }
+  if (characterAngle !== undefined && characterAngle !== null) {
+    updates.push('character_angle = $' + paramIndex++);
+    values.push(characterAngle);
+  }
+  if (referenceImageUrl !== undefined && referenceImageUrl !== null) {
+    updates.push('reference_image_url = $' + paramIndex++);
+    values.push(referenceImageUrl);
+  }
+  if (trimStart !== undefined && trimStart !== null) {
+    updates.push('trim_start = $' + paramIndex++);
+    values.push(trimStart);
+  }
+  if (trimEnd !== undefined && trimEnd !== null) {
+    updates.push('trim_end = $' + paramIndex++);
+    values.push(trimEnd);
+  }
+  // v6.3 新增: image_prompt 字段
+  if (imagePrompt !== undefined && imagePrompt !== null) {
+    updates.push('image_prompt = $' + paramIndex++);
+    values.push(imagePrompt);
+  }
+
+  if (updates.length === 0) {
+    return null;
+  }
+
+  values.push(id);
   const result = await pool.query(
-    `UPDATE shots SET
-      shot_number = COALESCE($1, shot_number),
-      shot_type = COALESCE($2, shot_type),
-      camera_movement = COALESCE($3, camera_movement),
-      visual_description = COALESCE($4, visual_description),
-      visual_prompt = COALESCE($5, visual_prompt),
-      original_text = COALESCE($6, original_text),
-      dialogue = COALESCE($7, dialogue),
-      action_description = COALESCE($8, action_description),
-      duration = COALESCE($9, duration),
-      character_id = COALESCE($10, character_id),
-      scene_image_url = COALESCE($11, scene_image_url),
-      character_angle = COALESCE($12, character_angle),
-      reference_image_url = COALESCE($14, reference_image_url),
-      trim_start = COALESCE($15, trim_start),
-      trim_end = COALESCE($16, trim_end)
-    WHERE id = $13
-    RETURNING *`,
-    [
-      shotNumber ?? null,
-      shotType ?? null,
-      cameraMovement ?? null,
-      visualDescription ?? null,
-      visualPrompt ?? null,
-      originalText ?? null,
-      dialogue ?? null,
-      actionDescription ?? null,
-      duration ?? null,
-      characterId ?? null,
-      sceneImageUrl ?? null,
-      characterAngle ?? null,
-      id,
-      referenceImageUrl ?? null,
-      trimStart ?? null,
-      trimEnd ?? null,
-    ]
+    'UPDATE shots SET ' + updates.join(', ') + ' WHERE id = $' + paramIndex + ' RETURNING *',
+    values
   );
   return result.rows[0] || null;
 }

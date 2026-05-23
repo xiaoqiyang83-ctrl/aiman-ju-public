@@ -423,9 +423,16 @@
                       :class="{ 
                         completed: shot.video_status === 'completed', 
                         generating: shot.video_status === 'generating' || shot.video_status === 'processing',
-                        selected: selectedShotIds.includes(shot.id) 
+                        selected: selectedShotIds.includes(shot.id),
+                        dragging: dragIndex === idx,
+                        'drag-over': dragOverIndex === idx
                       }"
+                      draggable="true"
                       @click="handleShotClick(shot)"
+                      @dragstart="handleDragStart($event, idx)"
+                      @dragover.prevent="handleDragOver($event, idx)"
+                      @drop="handleDrop($event, idx, scene)"
+                      @dragend="handleDragEnd"
                     >
                       <!-- 缩略图区域 -->
                       <div class="shot-thumb-enhanced" @click.stop>
@@ -1455,6 +1462,7 @@
       <template #footer>
         <el-button type="danger" plain @click="handleDeleteShotFromDialog">删除镜头</el-button>
         <el-button @click="showShotDetailDialog = false">取消</el-button>
+        <el-button :loading="regeneratingShot" @click="handleRegenerateShot">重新生成</el-button>
         <el-button type="primary" :loading="savingShot" @click="handleSaveShot">保存</el-button>
       </template>
     </el-dialog>
@@ -2274,11 +2282,53 @@ const currentScriptId = ref(null)
 const expandedSceneIds = ref([]) // 折叠展开的场景ID列表
 const showShotDetailDialog = ref(false)
 const savingShot = ref(false)
+const regeneratingShot = ref(false)
 const currentShot = ref(null)
 const showSceneDetailDialog = ref(false)
 const savingSceneDetail = ref(false)
 const currentScene = ref(null)
 const selectedShotIds = ref([])
+
+// ==================== v6.3 分镜拖拽排序 ====================
+const dragIndex = ref(-1)
+const dragOverIndex = ref(-1)
+
+const handleDragStart = (e, index) => {
+  dragIndex.value = index
+  e.dataTransfer.effectAllowed = 'move'
+}
+
+const handleDragOver = (e, index) => {
+  e.preventDefault()
+  dragOverIndex.value = index
+}
+
+const handleDrop = async (e, index, scene) => {
+  e.preventDefault()
+  if (dragIndex.value === index || dragIndex.value === -1) return
+  
+  const shotOrder = [...scene.shots.keys()]
+  const [moved] = shotOrder.splice(dragIndex.value, 1)
+  shotOrder.splice(index, 0, moved)
+  
+  try {
+    const res = await scenesAPI.reorderShots(scene.id, shotOrder)
+    if (res.data.success) {
+      await loadScenes(true)
+      ElMessage.success('排序更新成功')
+    }
+  } catch (err) {
+    ElMessage.error('排序更新失败')
+  }
+  
+  dragIndex.value = -1
+  dragOverIndex.value = -1
+}
+
+const handleDragEnd = () => {
+  dragIndex.value = -1
+  dragOverIndex.value = -1
+}
 
 // ==================== 视频相关 ====================
 const loadingVideos = ref(false)
@@ -4172,6 +4222,27 @@ const handleSaveShot = async () => {
     ElMessage.error('保存失败: ' + (err.response?.data?.message || err.message))
   } finally {
     savingShot.value = false
+  }
+}
+
+const handleRegenerateShot = async () => {
+  if (!currentShot.value || !currentScene.value) return
+  regeneratingShot.value = true
+  try {
+    const res = await scenesAPI.regenerateShot(
+      currentScene.value.id,
+      currentShot.value.shot_number - 1
+    )
+    if (res.data.success) {
+      ElMessage.success('重新生成成功')
+      // 刷新当前shot数据
+      await loadScenes(true)
+      await loadShots(true)
+    }
+  } catch (err) {
+    ElMessage.error('重新生成失败: ' + (err.response?.data?.message || err.message))
+  } finally {
+    regeneratingShot.value = false
   }
 }
 
@@ -6838,6 +6909,16 @@ const handleMoveShot = async (scene, shot, direction) => {
   object-fit: cover;
   border-radius: 8px;
   margin-top: 8px;
+}
+
+/* v6.3 分镜拖拽排序样式 */
+.dragging {
+  opacity: 0.5;
+  border: 2px dashed #409eff !important;
+}
+.drag-over {
+  border: 2px solid #409eff !important;
+  background: #ecf5ff;
 }
 
 </style>

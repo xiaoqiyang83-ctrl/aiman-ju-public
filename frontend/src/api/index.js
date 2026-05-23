@@ -131,7 +131,12 @@ export const scenesAPI = {
   generate: (scriptId) => api.post('/scenes/generate?script_id=' + scriptId),
   update: (id, data) => api.put('/scenes/' + id, data),
   delete: (id) => api.delete('/scenes/' + id),
-  generateImage: (sceneId, data) => api.post('/scenes/' + sceneId + '/generate-image', data)
+  generateImage: (sceneId, data) => api.post('/scenes/' + sceneId + '/generate-image', data),
+  // v6.3 分镜交互
+  regenerateShot: (sceneId, shotIndex, data) =>
+    api.post('/scenes/' + sceneId + '/shots/' + shotIndex + '/regenerate', data),
+  reorderShots: (sceneId, shotOrder) =>
+    api.put('/scenes/' + sceneId + '/shots/reorder', { shotOrder }),
 }
 
 // ==================== 镜头相关 ====================
