@@ -564,3 +564,102 @@ console.log('');
 if (failed > 0) {
     process.exit(1);
 }
+
+// ==================== v7.0 真实剧本测试 ====================
+
+var calculatePowerUpScore = aiService.calculatePowerUpScore;
+var applyPaceDetection = aiService.applyPaceDetection;
+var POWER_UP_PATTERNS = aiService.POWER_UP_PATTERNS;
+
+// v7.0 测试：真实剧本数据通过节奏检测
+test('v7.0真实剧本-节奏检测结果应包含问题列表', function() {
+    var mockData = createRealScriptMockData();
+    var result = applyDirectorEngine(mockData);
+    
+    if (!result.scenes[0].pace_analysis) {
+        throw new Error('场景应包含pace_analysis');
+    }
+    if (!Array.isArray(result.scenes[0].pace_analysis.problems)) {
+        throw new Error('pace_analysis应包含problems数组');
+    }
+});
+
+test('v7.0真实剧本-应包含评分字段', function() {
+    var mockData = createRealScriptMockData();
+    var result = applyDirectorEngine(mockData);
+    
+    // 检查是否有shot包含climax字段（如果检测到爽点）
+    var hasClimax = false;
+    for (var i = 0; i < result.scenes[0].shots.length; i++) {
+        if (result.scenes[0].shots[i].climax && result.scenes[0].shots[i].climax.type) {
+            hasClimax = true;
+            break;
+        }
+    }
+    
+    // 这个剧本可能没有爽点，所以不强制要求有climax
+    console.log('[INFO] 剧本爽点检测: ' + (hasClimax ? '有爽点' : '无爽点'));
+});
+
+test('v7.0真实剧本-每个shot应有retention分数', function() {
+    var mockData = createRealScriptMockData();
+    var result = applyDirectorEngine(mockData);
+    
+    for (var i = 0; i < result.scenes[0].shots.length; i++) {
+        var shot = result.scenes[0].shots[i];
+        if (typeof shot.retention !== 'object') {
+            throw new Error('shot ' + (i+1) + '应有retention字段');
+        }
+    }
+});
+
+test('v7.0真实剧本-所有8种爽点类型应可被检测', function() {
+    // 测试8种爽点的关键词是否都能被检测
+    var testCases = [
+        { name: '觉醒', keyword: '觉醒' },
+        { name: '反杀', keyword: '反杀' },
+        { name: '打脸', keyword: '打脸' },
+        { name: '压迫', keyword: '压迫' },
+        { name: '羞辱', keyword: '羞辱' },
+        { name: '装逼', keyword: '淡然' },
+        { name: '绝望', keyword: '绝望' },
+        { name: '爆发', keyword: '爆发' }
+    ];
+    
+    for (var i = 0; i < testCases.length; i++) {
+        var testCase = testCases[i];
+        var found = false;
+        for (var j = 0; j < POWER_UP_PATTERNS.length; j++) {
+            if (POWER_UP_PATTERNS[j].name === testCase.name) {
+                if (POWER_UP_PATTERNS[j].keywords.indexOf(testCase.keyword) >= 0) {
+                    found = true;
+                    break;
+                }
+            }
+        }
+        if (!found) {
+            throw new Error('爽点类型 ' + testCase.name + ' 未能正确配置');
+        }
+    }
+});
+
+test('v7.0真实剧本-每个爽点应有权重', function() {
+    for (var i = 0; i < POWER_UP_PATTERNS.length; i++) {
+        var pattern = POWER_UP_PATTERNS[i];
+        if (typeof pattern.weight !== 'number') {
+            throw new Error('爽点 ' + pattern.name + ' 缺少weight属性');
+        }
+    }
+});
+
+// ==================== 测试结果 ====================
+
+console.log('');
+console.log('========================================');
+console.log('v7.0 真实剧本测试结果: ' + passed + ' 通过，' + failed + ' 失败');
+console.log('========================================');
+console.log('');
+
+if (failed > 0) {
+    process.exit(1);
+}

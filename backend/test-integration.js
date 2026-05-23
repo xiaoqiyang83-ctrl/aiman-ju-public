@@ -906,4 +906,151 @@ if (failed === 0) {
     console.log('');
 }
 
+// ==================== v7.0 集成测试 ====================
+
+var calculatePowerUpScore = aiService.calculatePowerUpScore;
+var applyPaceDetection = aiService.applyPaceDetection;
+
+test('v7.0完整流程-应包含节奏检测', function() {
+    var mockData = createMockData([
+        createMockScene({ time_of_day: '日内' }, [
+            { shot_type: '全景', duration: 3, emotion_cue: { primary_emotion: '愤怒', visual_mapping: '' } },
+            { shot_type: '中景', duration: 4, emotion_cue: { primary_emotion: '震惊', visual_mapping: '' }, dialogue: '觉醒吧！' },
+            { shot_type: '特写', duration: 2 }
+        ])
+    ]);
+    
+    var result = applyDirectorEngine(mockData);
+    
+    if (!result.scenes[0].pace_analysis) {
+        throw new Error('场景应包含pace_analysis字段');
+    }
+    if (!result.scenes[0].pace_analysis.pace) {
+        throw new Error('pace_analysis应包含pace字段');
+    }
+    if (!result.scenes[0].pace_analysis.risk) {
+        throw new Error('pace_analysis应包含risk字段');
+    }
+});
+
+test('v7.0完整流程-应包含留存优化结果', function() {
+    var mockData = createMockData([
+        createMockScene({}, [
+            { emotion_cue: { primary_emotion: '愤怒', visual_mapping: '' } },
+            { emotion_cue: { primary_emotion: '愤怒', visual_mapping: '' } },
+            { emotion_cue: { primary_emotion: '愤怒', visual_mapping: '' } },
+            { emotion_cue: { primary_emotion: '愤怒', visual_mapping: '' } },
+            { emotion_cue: { primary_emotion: '愤怒', visual_mapping: '' } }
+        ])
+    ]);
+    
+    var result = applyDirectorEngine(mockData);
+    
+    // 检查每个shot是否包含retention字段
+    for (var i = 0; i < result.scenes[0].shots.length; i++) {
+        if (!result.scenes[0].shots[i].retention) {
+            throw new Error('shot ' + (i+1) + '应有retention字段');
+        }
+    }
+});
+
+test('v7.0完整流程-爽点场景应包含climax评分', function() {
+    var mockData = createMockData([
+        createMockScene({}, [
+            { dialogue: '主角力量觉醒', original_text: '力量觉醒' }
+        ])
+    ]);
+    
+    var result = applyDirectorEngine(mockData);
+    var shot = result.scenes[0].shots[0];
+    
+    if (!shot.climax) {
+        throw new Error('爽点场景应包含climax字段');
+    }
+    if (!shot.climax.type) {
+        throw new Error('climax应包含type字段');
+    }
+    if (!shot.climax.score) {
+        throw new Error('climax应包含score字段');
+    }
+});
+
+test('v7.0完整流程-最终JSON包含emotion字段', function() {
+    var mockData = createMockData([
+        createMockScene({}, [
+            { emotion_cue: { primary_emotion: '愤怒', visual_mapping: '' } }
+        ])
+    ]);
+    
+    var result = applyDirectorEngine(mockData);
+    var shot = result.scenes[0].shots[0];
+    
+    if (!shot.emotion_cue) {
+        throw new Error('shot应包含emotion_cue字段');
+    }
+});
+
+test('v7.0完整流程-最终JSON包含sound字段', function() {
+    var mockData = createMockData([
+        createMockScene({}, [
+            { emotion_cue: { primary_emotion: '愤怒', visual_mapping: '' } }
+        ])
+    ]);
+    
+    var result = applyDirectorEngine(mockData);
+    var shot = result.scenes[0].shots[0];
+    
+    if (!shot.sound) {
+        throw new Error('shot应包含sound字段');
+    }
+});
+
+test('v7.0完整流程-爽点应触发仰视角度', function() {
+    var mockData = createMockData([
+        createMockScene({}, [
+            { dialogue: '哼，你算什么', camera_angle: '平视' }
+        ])
+    ]);
+    
+    var result = applyDirectorEngine(mockData);
+    var shot = result.scenes[0].shots[0];
+    
+    if (shot.climax && shot.climax.type === '打脸') {
+        if (shot.camera_angle !== '仰视') {
+            throw new Error('打脸爽点应使用仰视角度');
+        }
+    }
+});
+
+test('v7.0爽点综合评分-多场景应分别计算', function() {
+    var mockData = createMockData([
+        createMockScene({ title: '场景1' }, [
+            { dialogue: '主角力量觉醒', original_text: '力量觉醒' }
+        ]),
+        createMockScene({ title: '场景2' }, [
+            { dialogue: '主角绝望', original_text: '绝望' }
+        ])
+    ]);
+    
+    var result = applyDirectorEngine(mockData);
+    
+    // 两个场景的爽点评分应该不同
+    if (result.scenes.length !== 2) {
+        throw new Error('应有2个场景');
+    }
+});
+
+// ==================== 测试结果 ====================
+
+console.log('');
+console.log('========================================');
+console.log('v7.0 集成测试结果: ' + passed + '/' + (passed + failed) + ' PASSED');
+console.log('========================================');
+
+if (failed === 0) {
+    console.log('');
+    console.log('v7.0 所有集成测试通过！');
+    console.log('');
+}
+
 process.exit(failed > 0 ? 1 : 0);

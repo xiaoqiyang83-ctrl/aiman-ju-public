@@ -989,6 +989,49 @@ function normalizeStoryboard(data) {
             // 为兼容前端，生成综合description
             shot.description = shot.visual_prompt.scene_description || shot.visual_prompt.lighting || '';
             shot.action_description = shot.action_prompt.physical_action;
+            
+            // v7.0 初始化新字段默认值
+            if (!shot.emotion) {
+                shot.emotion = {
+                    type: shot.emotion_cue && shot.emotion_cue.primary_emotion || '',
+                    score: 5
+                };
+            }
+            if (!shot.climax) {
+                shot.climax = {
+                    type: '',
+                    score: 0,
+                    level: '普通'
+                };
+            }
+            if (!shot.retention) {
+                shot.retention = {
+                    score: 7,
+                    risk: 'low'
+                };
+            }
+            if (!shot.shot) {
+                shot.shot = {
+                    type: shot.shot_type,
+                    angle: shot.camera_angle
+                };
+            }
+            if (!shot.camera) {
+                shot.camera = {
+                    movement: shot.camera_movement,
+                    speed: 'normal'
+                };
+            }
+            if (!shot.lighting) {
+                shot.lighting = {
+                    color: shot.visual_prompt && shot.visual_prompt.lighting || ''
+                };
+            }
+            if (!shot.sound) {
+                shot.sound = {
+                    effect: ''
+                };
+            }
         }
     }
     
@@ -1096,18 +1139,74 @@ var EMOTION_SHOT_RULES = {
     '压迫': { shot_type: ['特写'], camera_movement: '慢推', light: '暗调' }
 };
 
+// v7.0 爽点检测补全：8种爽点 + 评分系统 + 综合评分算法
 var POWER_UP_PATTERNS = [
-    { name: '觉醒', keywords: ['抬头', '睁眼', '站起来', '站起', '觉醒', '苏醒', '爆发', '力量觉醒'],
-      overrides: { shot_type: '大特写', camera_angle: '仰视', camera_movement: '慢推', duration: 4 } },
-    { name: '反杀', keywords: ['一刀', '击败', '赢了', '反杀', '斩', '杀', '击溃', '打败'],
-      overrides: { shot_type: '特写', camera_movement: '跟镜头', duration: 2 } },
-    { name: '打脸', keywords: ['哼', '冷笑', '你算什么', '不过如此', '不值一提', '可笑', '不自量力'],
-      overrides: { shot_type: '大特写', camera_angle: '仰视', duration: 3 } },
-    { name: '威压', keywords: ['气息', '压迫', '跪下', '颤抖', '跪', '臣服', '恐惧', '战栗'],
-      overrides: { shot_type: '特写', camera_movement: '推镜头', duration: 3 } },
-    { name: '装逼', keywords: ['慢慢', '淡然', '无所谓', '轻轻', '随意', '微笑', '淡淡', '平静'],
-      overrides: { shot_type: '近景', camera_angle: '侧视', camera_movement: '环绕', duration: 4 } }
+    { name: '觉醒', score: 10, keywords: ['抬头', '睁眼', '站起来', '站起', '觉醒', '苏醒', '力量觉醒', '潜能爆发', '血脉觉醒'],
+      overrides: { shot_type: '大特写', camera_angle: '仰视', camera_movement: '慢推', duration: 4 }, weight: 2 },
+    { name: '反杀', score: 9, keywords: ['一刀', '击败', '赢了', '反杀', '斩', '杀', '击溃', '打败', '致命一击', '逆转'],
+      overrides: { shot_type: '特写', camera_movement: '跟镜头', duration: 2 }, weight: 1.5 },
+    { name: '打脸', score: 8, keywords: ['哼', '冷笑', '你算什么', '不过如此', '不值一提', '可笑', '不自量力', '打脸', '啪啪'],
+      overrides: { shot_type: '大特写', camera_angle: '仰视', duration: 3 }, weight: 1.2 },
+    { name: '压迫', score: 7, keywords: ['气息', '压迫', '跪下', '颤抖', '跪', '臣服', '恐惧', '战栗', '窒息', '威压'],
+      overrides: { shot_type: '特写', camera_movement: '推镜头', duration: 3 }, weight: 1 },
+    { name: '羞辱', score: 7, keywords: ['羞辱', '践踏', '蝼蚁', '垃圾', '废物', '不配', '低级', '可笑', '愚昧', '侮辱'],
+      overrides: { shot_type: '特写', camera_angle: '俯视', camera_movement: '固定', duration: 3 }, weight: 1.3 },
+    { name: '装逼', score: 6, keywords: ['慢慢', '淡然', '无所谓', '轻轻', '随意', '微笑', '淡淡', '平静', '淡定', '轻描淡写'],
+      overrides: { shot_type: '近景', camera_angle: '侧视', camera_movement: '环绕', duration: 4 }, weight: 0.8 },
+    { name: '绝望', score: 5, keywords: ['绝望', '无力', '崩塌', '破碎', '崩溃', '希望破灭', '心死', '万念俱灰', '心碎'],
+      overrides: { shot_type: '远景', camera_angle: '俯视', camera_movement: '拉镜头', duration: 4 }, weight: 0.5 },
+    { name: '爆发', score: 8, keywords: ['爆发', '释放', '能量', '轰鸣', '炸裂', '燃烧', '沸腾', '力量爆发'],
+      overrides: { shot_type: '大特写', camera_angle: '仰视', camera_movement: '快速推镜', duration: 3 }, weight: 1.8 }
 ];
+
+// v7.0 爽点等级计算
+function calculateClimaxLevel(totalScore) {
+    if (totalScore >= 9) return '爆点';
+    if (totalScore >= 7) return '高潮';
+    if (totalScore >= 4) return '有爽点';
+    return '普通';
+}
+
+// v7.0 计算爽点综合评分
+function calculatePowerUpScore(shots) {
+    var scoreMap = {};
+    for (var i = 0; i < POWER_UP_PATTERNS.length; i++) {
+        var pattern = POWER_UP_PATTERNS[i];
+        scoreMap[pattern.name] = { score: 0, weight: pattern.weight };
+    }
+    
+    // 统计每个爽点类型出现的次数和最高分数
+    for (var j = 0; j < shots.length; j++) {
+        var shot = shots[j];
+        var powerUp = detectPowerUp(shot);
+        if (powerUp) {
+            if (!scoreMap[powerUp.name]) {
+                scoreMap[powerUp.name] = { score: 0, weight: powerUp.weight || 1 };
+            }
+            // 使用该爽点的最高分
+            if (powerUp.score > scoreMap[powerUp.name].score) {
+                scoreMap[powerUp.name].score = powerUp.score;
+            }
+        }
+    }
+    
+    // 计算加权总分
+    var totalScore = 0;
+    var details = [];
+    for (var name in scoreMap) {
+        if (scoreMap[name].score > 0) {
+            var weightedScore = scoreMap[name].score * scoreMap[name].weight;
+            totalScore += weightedScore;
+            details.push({ type: name, score: scoreMap[name].score, weighted: weightedScore.toFixed(1) });
+        }
+    }
+    
+    return {
+        total: Math.round(totalScore * 10) / 10,
+        level: calculateClimaxLevel(totalScore),
+        details: details
+    };
+}
 
 var SHOT_LEVELS = ['远景', '全景', '中远景', '中景', '中近景', '近景', '特写', '大特写'];
 
@@ -1547,22 +1646,117 @@ function deepClone(obj) {
     return copy;
 }
 
+// v7.0 增强版爽点检测，返回带评分的爽点对象
 function detectPowerUp(shot) {
     var text = '';
     if (shot.dialogue) text += shot.dialogue;
     if (shot.original_text) text += shot.original_text;
     if (shot.action_prompt && shot.action_prompt.physical_action) text += shot.action_prompt.physical_action;
     text = String(text).toLowerCase();
+    
+    var matchedPattern = null;
+    var matchedKeyword = '';
+    
     for (var i = 0; i < POWER_UP_PATTERNS.length; i++) {
         var pattern = POWER_UP_PATTERNS[i];
         for (var j = 0; j < pattern.keywords.length; j++) {
             if (text.indexOf(pattern.keywords[j]) >= 0) {
-                console.log('[Director Engine] 检测到爽点: ' + pattern.name + ' (关键词: ' + pattern.keywords[j] + ')');
-                return pattern;
+                // 返回带有分数的模式对象（使用全局 POWER_UP_PATTERNS 中的分数）
+                matchedPattern = {
+                    name: pattern.name,
+                    score: pattern.score || 5,
+                    weight: pattern.weight || 1,
+                    keywords: pattern.keywords,
+                    overrides: pattern.overrides
+                };
+                matchedKeyword = pattern.keywords[j];
+                break;
             }
         }
+        if (matchedPattern) break;
+    }
+    
+    if (matchedPattern) {
+        console.log('[Director Engine] 检测到爽点: ' + matchedPattern.name + ' (分数:' + matchedPattern.score + ', 关键词: ' + matchedKeyword + ')');
+        return matchedPattern;
     }
     return null;
+}
+
+// v7.0 音效推荐映射
+var EMOTION_SOUND_MAP = {
+    '愤怒': ['heartbeat', 'drum'],
+    '战斗': ['heartbeat', 'drum', 'sword'],
+    '绝望': ['wind', 'silence', 'heartbeat'],
+    '爽点高潮': ['impact', 'bass_drop'],
+    '压迫': ['low_hum', 'tension'],
+    '装逼': ['sparkle', 'whoosh'],
+    '悲伤': ['sad_music', 'wind'],
+    '震惊': ['impact', 'surprise'],
+    '喜悦': ['uplift', 'sparkle'],
+    '恐惧': ['low_hum', 'tension'],
+    '紧张': ['heartbeat', 'tension'],
+    '觉醒': ['impact', 'power_surge'],
+    '反杀': ['impact', 'bass_drop'],
+    '打脸': ['slap', 'impact'],
+    '爆发': ['explosion', 'power_surge']
+};
+
+// v7.0 爽点镜头角度推荐
+var CLIMAX_ANGLE_MAP = {
+    '打脸': '仰视',
+    '压迫': '俯视',
+    '装逼': '平视偏仰',
+    '绝望': '俯视',
+    '觉醒': '仰视',
+    '反杀': '仰视',
+    '爆发': '仰视',
+    '羞辱': '俯视'
+};
+
+// v7.0 切镜速度映射
+var SHOT_SPEED_MAP = {
+    'fast': ['战斗', '爽点高潮', '爆发', '反杀', '打脸'],
+    'normal': ['喜悦', '悲伤', '震惊', '愤怒', '恐惧'],
+    'slow': ['绝望', '压迫', '装逼', '羞辱']
+};
+
+// v7.0 增强版情绪映射：添加音效、角度、切镜速度（前置定义，供applyDirectorEngine使用）
+function applyEnhancedEmotionMapping(shot, powerUp) {
+    // 如果有爽点，优先使用爽点角度
+    if (powerUp && CLIMAX_ANGLE_MAP[powerUp.name]) {
+        var recommendedAngle = CLIMAX_ANGLE_MAP[powerUp.name];
+        if (!shot.camera_angle || shot.camera_angle === '平视') {
+            console.log('[Director Engine] 爽点角度推荐: ' + powerUp.name + ' → ' + recommendedAngle);
+            shot.camera_angle = recommendedAngle;
+        }
+        // 添加爽点音效
+        if (shot.sound) {
+            shot.sound.effect = EMOTION_SOUND_MAP[powerUp.name + '高潮'] || EMOTION_SOUND_MAP[powerUp.name] || 'impact';
+        }
+    }
+    
+    var emotion = shot.emotion_cue && shot.emotion_cue.primary_emotion;
+    if (!emotion) return;
+    
+    // 添加情绪音效
+    if (EMOTION_SOUND_MAP[emotion]) {
+        if (!shot.sound) shot.sound = {};
+        if (!shot.sound.effect) {
+            shot.sound.effect = EMOTION_SOUND_MAP[emotion][0];
+            console.log('[Director Engine] 情绪音效推荐: ' + emotion + ' → ' + shot.sound.effect);
+        }
+    }
+    
+    // 添加切镜速度
+    var speed = 'normal';
+    for (var category in SHOT_SPEED_MAP) {
+        if (SHOT_SPEED_MAP[category].indexOf(emotion) >= 0) {
+            speed = category;
+            break;
+        }
+    }
+    shot.camera_speed = speed;
 }
 
 function applyEmotionMapping(shot) {
@@ -1588,7 +1782,240 @@ function applyEmotionMapping(shot) {
     }
 }
 
-function applyPowerUpEnhancement(shot) {
+// v7.0 节奏检测引擎
+function applyPaceDetection(shots) {
+    var result = {
+        pace: 'normal',
+        risk: 'none',
+        problems: [],
+        retention_score: 7,
+        drop_risk: 'low'
+    };
+    
+    if (!shots || shots.length === 0) return result;
+    
+    var risk = 0;
+    var boringScore = 0;
+    var fatigue = 0;
+    
+    // 1. 高潮间隔检测：超过15秒（累计duration）没有高潮 → risk += 3
+    var climaxInterval = 0;
+    var hasClimax = false;
+    for (var i = 0; i < shots.length; i++) {
+        var shot = shots[i];
+        climaxInterval += shot.duration || 3;
+        if (detectPowerUp(shot)) {
+            hasClimax = true;
+            climaxInterval = 0;
+        }
+        if (climaxInterval > 15) {
+            risk += 3;
+            result.problems.push('15秒无高潮');
+            climaxInterval = 0;
+            console.log('[Pace Detection] 高潮间隔过大 (位置:' + (i+1) + ')');
+        }
+    }
+    
+    // 2. 冲突频率检测：前3秒（前几个shot的累计duration）必须有爽点或冲突
+    var conflictCount = 0;
+    var firstThreeSeconds = 0;
+    for (var j = 0; j < shots.length && firstThreeSeconds < 3; j++) {
+        var s = shots[j];
+        firstThreeSeconds += s.duration || 3;
+        if (detectPowerUp(s) || (s.emotion_cue && ['愤怒', '恐惧', '震惊'].indexOf(s.emotion_cue.primary_emotion) >= 0)) {
+            conflictCount++;
+        }
+    }
+    if (conflictCount === 0) {
+        risk += 2;
+        result.problems.push('前3秒无冲突');
+        console.log('[Pace Detection] 前3秒无冲突');
+    }
+    
+    // 3. 对话长度检测：连续对白超过80字 → boring_score += 2
+    var currentDialogueLength = 0;
+    var consecutiveDialogueShots = 0;
+    for (var k = 0; k < shots.length; k++) {
+        var dialogue = String(shots[k].dialogue || '').replace(/@[\u4e00-\u9fa5a-zA-Z0-9]+[：:]/g, '').length;
+        if (dialogue > 0) {
+            currentDialogueLength += dialogue;
+            consecutiveDialogueShots++;
+            if (currentDialogueLength > 80) {
+                boringScore += 2;
+                result.problems.push('对话过长');
+                console.log('[Pace Detection] 连续对话过长 (' + consecutiveDialogueShots + '个镜头)');
+                currentDialogueLength = 0;
+                consecutiveDialogueShots = 0;
+            }
+        } else {
+            currentDialogueLength = 0;
+            consecutiveDialogueShots = 0;
+        }
+    }
+    
+    // 4. 情绪平缓检测：连续5个镜头情绪一致 → fatigue += 3
+    var consecutiveEmotions = 1;
+    for (var m = 1; m < shots.length; m++) {
+        var prevEmotion = shots[m-1].emotion_cue && shots[m-1].emotion_cue.primary_emotion;
+        var currEmotion = shots[m].emotion_cue && shots[m].emotion_cue.primary_emotion;
+        if (prevEmotion && currEmotion && prevEmotion === currEmotion) {
+            consecutiveEmotions++;
+            if (consecutiveEmotions >= 5) {
+                fatigue += 3;
+                result.problems.push('情绪疲劳');
+                console.log('[Pace Detection] 情绪疲劳 (连续' + consecutiveEmotions + '个镜头)');
+                consecutiveEmotions = 1;
+            }
+        } else {
+            consecutiveEmotions = 1;
+        }
+    }
+    
+    // 计算节奏速度
+    var totalDuration = 0;
+    for (var n = 0; n < shots.length; n++) {
+        totalDuration += shots[n].duration || 3;
+    }
+    var avgShotDuration = totalDuration / shots.length;
+    if (avgShotDuration > 4) {
+        result.pace = 'slow';
+    } else if (avgShotDuration < 2.5) {
+        result.pace = 'fast';
+    }
+    
+    // 计算风险等级
+    if (risk >= 6 || fatigue >= 6) {
+        result.risk = 'high';
+        result.drop_risk = 'high';
+        result.retention_score = Math.max(1, result.retention_score - 4);
+    } else if (risk >= 3 || fatigue >= 3 || boringScore >= 4) {
+        result.risk = 'medium';
+        result.drop_risk = 'medium';
+        result.retention_score = Math.max(1, result.retention_score - 2);
+    } else if (risk > 0 || boringScore > 0) {
+        result.risk = 'low';
+        result.drop_risk = 'low';
+    }
+    
+    // 减去无聊分数的影响
+    result.retention_score = Math.max(1, result.retention_score - Math.floor(boringScore / 2));
+    
+    console.log('[Pace Detection] 结果: pace=' + result.pace + ', risk=' + result.risk + ', retention=' + result.retention_score);
+    return result;
+}
+
+// v7.0 留存优化
+function applyRetentionOptimization(shots, paceResult) {
+    if (!shots || shots.length === 0) return;
+    
+    console.log('[Retention] 开始留存优化...');
+    
+    // 1. 拖沓修复：检测到"对话过长"时，在长对话中间插入反应镜头
+    var dialogueCount = 0;
+    var dialogueStartIndex = -1;
+    for (var i = 0; i < shots.length; i++) {
+        var dialogue = String(shots[i].dialogue || '');
+        if (dialogue.length > 40) {
+            if (dialogueStartIndex === -1) {
+                dialogueStartIndex = i;
+            }
+            dialogueCount++;
+        } else {
+            if (dialogueCount >= 2) {
+                // 在中间插入反应镜头
+                var insertIndex = dialogueStartIndex + Math.floor(dialogueCount / 2);
+                var reactionShot = createReactionShot(shots[dialogueStartIndex]);
+                shots.splice(insertIndex, 0, reactionShot);
+                console.log('[Retention] 拖沓修复：在位置' + (insertIndex+1) + '插入反应镜头');
+                i++;
+            }
+            dialogueCount = 0;
+            dialogueStartIndex = -1;
+        }
+    }
+    
+    // 2. 高潮间隔修复：检测到"15秒无高潮"时，对平淡shot添加情绪强化
+    if (paceResult.problems.indexOf('15秒无高潮') >= 0) {
+        var climaxInterval = 0;
+        var lastClimaxIndex = -1;
+        for (var j = 0; j < shots.length; j++) {
+            climaxInterval += shots[j].duration || 3;
+            if (detectPowerUp(shots[j])) {
+                lastClimaxIndex = j;
+                climaxInterval = 0;
+            }
+            if (climaxInterval > 12 && lastClimaxIndex >= 0) {
+                // 强化中间平淡镜头
+                if (!shots[j].emotion_cue || !shots[j].emotion_cue.primary_emotion) {
+                    shots[j].emotion_cue = { primary_emotion: '紧张', visual_mapping: '高对比' };
+                    shots[j].camera_movement = '推镜头';
+                    console.log('[Retention] 高潮间隔修复：强化位置' + (j+1) + '的情绪');
+                }
+            }
+        }
+    }
+    
+    // 3. 情绪疲劳修复：检测到"5个镜头情绪一致"时，强制切换情绪
+    if (paceResult.problems.indexOf('情绪疲劳') >= 0) {
+        var consecutiveCount = 1;
+        var emotionShots = [];
+        for (var k = 1; k < shots.length; k++) {
+            var prevE = shots[k-1].emotion_cue && shots[k-1].emotion_cue.primary_emotion;
+            var currE = shots[k].emotion_cue && shots[k].emotion_cue.primary_emotion;
+            if (prevE && currE && prevE === currE) {
+                consecutiveCount++;
+                emotionShots.push(k);
+            } else {
+                consecutiveCount = 1;
+                emotionShots = [];
+            }
+            if (consecutiveCount >= 4) {
+                // 强制改变第4个镜头的情绪
+                var changeIndex = emotionShots[emotionShots.length - 1];
+                var originalEmotion = shots[changeIndex].emotion_cue.primary_emotion;
+                var alternateEmotions = ['震惊', '愤怒', '喜悦', '恐惧'];
+                var newEmotion = alternateEmotions[Math.floor(Math.random() * alternateEmotions.length)];
+                if (alternateEmotions.indexOf(originalEmotion) < 0) {
+                    newEmotion = alternateEmotions[0];
+                }
+                shots[changeIndex].emotion_cue.primary_emotion = newEmotion;
+                console.log('[Retention] 情绪疲劳修复：强制切换位置' + (changeIndex+1) + '的情绪 ' + originalEmotion + ' → ' + newEmotion);
+                consecutiveCount = 1;
+                emotionShots = [];
+            }
+        }
+    }
+    
+    console.log('[Retention] 留存优化完成');
+}
+
+// v7.0 创建反应镜头
+function createReactionShot(baseShot) {
+    return {
+        shot_number: 0,
+        shot_type: '特写',
+        camera_angle: '平视',
+        camera_movement: '固定',
+        duration: 1,
+        emotion_cue: { primary_emotion: '震惊', visual_mapping: '高对比' },
+        visual_prompt: {
+            scene_description: '反应镜头',
+            lighting: baseShot.visual_prompt && baseShot.visual_prompt.lighting || '自然光',
+            color_palette: baseShot.visual_prompt && baseShot.visual_prompt.color_palette || '',
+            character_placement: '',
+            facial_detail: '震惊表情',
+            composition: ''
+        },
+        action_prompt: { physical_action: '', micro_movement: '' },
+        dialogue: '',
+        narration: '',
+        original_text: '',
+        scene_reference: ''
+    };
+}
+
+// v7.0 增强版爽点强化：添加评分和climax信息
+function applyPowerUpEnhancement(shot, totalClimaxScore) {
     var powerUp = detectPowerUp(shot);
     if (!powerUp) return;
     var overrides = powerUp.overrides;
@@ -1599,6 +2026,13 @@ function applyPowerUpEnhancement(shot) {
     if (overrides.camera_angle) shot.camera_angle = overrides.camera_angle;
     if (overrides.camera_movement) shot.camera_movement = overrides.camera_movement;
     if (overrides.duration) shot.duration = overrides.duration;
+    
+    // v7.0 添加爽点评分信息
+    shot.climax = {
+        type: powerUp.name,
+        score: powerUp.score,
+        level: totalClimaxScore ? calculateClimaxLevel(totalClimaxScore) : '有爽点'
+    };
 }
 
 function fixShotTypeDiversity(shots) {
@@ -1769,8 +2203,9 @@ function fixDurationReasonableness(shot, shotType) {
 /**
  * 主入口：应用导演规则引擎
  */
+// v7.0 导演规则引擎（增强版）
 function applyDirectorEngine(data) {
-    console.log('[Director Engine] 开始执行导演规则引擎...');
+    console.log('[Director Engine] 开始执行导演规则引擎 v7.0...');
     var processed = deepClone(data);
     if (!processed || !Array.isArray(processed.scenes)) {
         console.log('[Director Engine] 无有效scenes数据，跳过');
@@ -1783,10 +2218,23 @@ function applyDirectorEngine(data) {
             console.log('[Director Engine] 场景 ' + (si + 1) + ' 无shots，跳过');
             continue;
         }
+        
+        // v7.0 第一步：计算爽点综合评分
+        var climaxScore = calculatePowerUpScore(scene.shots);
+        console.log('[Director Engine] 爽点评分: ' + climaxScore.total + ' (' + climaxScore.level + ')');
+        
         for (var i = 0; i < scene.shots.length; i++) {
             var shot = scene.shots[i];
-            applyPowerUpEnhancement(shot);
-            if (!detectPowerUp(shot)) applyEmotionMapping(shot);
+            var powerUp = detectPowerUp(shot);
+            applyPowerUpEnhancement(shot, climaxScore.total);
+            if (!powerUp) {
+                applyEmotionMapping(shot);
+                // v7.0 增强情绪映射：添加音效、角度
+                applyEnhancedEmotionMapping(shot, null);
+            } else {
+                // v7.0 爽点场景应用增强情绪映射
+                applyEnhancedEmotionMapping(shot, powerUp);
+            }
             fixDurationReasonableness(shot, shot.shot_type);
         }
         fixShotTypeDiversity(scene.shots);
@@ -1794,13 +2242,29 @@ function applyDirectorEngine(data) {
         applyDescriptionDiversity(scene);
         for (var i = 0; i < scene.shots.length; i++) {
             var shot = scene.shots[i];
-            if (detectPowerUp(shot)) applyPowerUpEnhancement(shot);
+            if (detectPowerUp(shot)) applyPowerUpEnhancement(shot, climaxScore.total);
         }
+        
+        // v7.0 第二步：节奏检测
+        var paceResult = applyPaceDetection(scene.shots);
+        scene.pace_analysis = paceResult;
+        
+        // v7.0 第三步：留存优化
+        applyRetentionOptimization(scene.shots, paceResult);
+        
+        // v7.0 第四步：计算每个shot的retention分数
+        for (var j = 0; j < scene.shots.length; j++) {
+            var shot = scene.shots[j];
+            if (!shot.retention) shot.retention = {};
+            shot.retention.score = paceResult.retention_score;
+            shot.retention.risk = paceResult.drop_risk;
+        }
+        
         console.log('[Director Engine] 场景 ' + (si + 1) + ' 处理完成，共 ' + scene.shots.length + ' 个shots');
     }
     // v6.2 台词后处理：在其他规则执行完毕后应用
     processed = applyDialogueRules(processed);
-    console.log('[Director Engine] 导演规则引擎执行完毕');
+    console.log('[Director Engine] 导演规则引擎 v7.0 执行完毕');
     return processed;
 }
 
@@ -2231,11 +2695,22 @@ module.exports = {
     compilePromptsForStoryboard,
     applyDirectorEngine,
     applyDialogueRules,
+    // v7.0 新增导出
+    calculatePowerUpScore,
+    detectPowerUp,
+    applyPowerUpEnhancement,
+    applyPaceDetection,
+    applyRetentionOptimization,
+    calculateClimaxLevel,
     SHOT_TYPE_MAP,
     CAMERA_MOVEMENT_MAP,
     TIME_OF_DAY_MAP,
     STORYBOARD_SYSTEM_PROMPT,
-    STORYBOARD_USER_TEMPLATE
+    STORYBOARD_USER_TEMPLATE,
+    POWER_UP_PATTERNS,
+    EMOTION_SOUND_MAP,
+    CLIMAX_ANGLE_MAP,
+    SHOT_SPEED_MAP
 };
 
 // ==================== v5.0 角色一致性系统 ====================
