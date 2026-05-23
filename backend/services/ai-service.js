@@ -2719,7 +2719,8 @@ function enforceDialogueFromScript(data, scriptContent) {
             
             if (bestSceneIdx >= 0) {
                 var scene = data.scenes[bestSceneIdx];
-                for (var sh = scene.shots.length - 1; sh >= 0; sh--) {
+                // v7.0.6 修复：从前往后找空shot，保证台词按剧本顺序分配
+                for (var sh = 0; sh < scene.shots.length; sh++) {
                     if (!String(scene.shots[sh].dialogue || '').trim()) {
                         scene.shots[sh].dialogue = correctText;
                         inserted = true;
