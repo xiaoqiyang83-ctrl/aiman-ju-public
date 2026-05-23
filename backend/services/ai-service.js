@@ -1127,7 +1127,7 @@ function adjustShotLevel(currentType, direction) {
 /**
  * v6.2 台词后处理规则引擎
  * 在applyDirectorEngine执行完毕后应用，处理LLM输出不规范的台词
- * 包含：补全说话人标注、合并断裂对话、拆分堆叠台词
+ * 包含：补全说话人标注、合并断裂对话、拆分堆叠台词、描述多样性、去重
  */
 function applyDialogueRules(data) {
     console.log('[Dialogue Rules] 开始执行台词后处理...');
@@ -1151,6 +1151,9 @@ function applyDialogueRules(data) {
         
         // 规则b：合并断裂对话（在拆分之后执行）
         mergeBrokenDialogues(processed.scenes[si]);
+        
+        // 规则d：台词去重（确保同一分镜内没有重复台词）
+        deduplicateDialogues(processed.scenes[si]);
     }
     
     console.log('[Dialogue Rules] 台词后处理执行完毕');
@@ -1159,7 +1162,12 @@ function applyDialogueRules(data) {
 
 /**
  * 规则a：补全说话人标注
- * 遍历每个shot的dialogue字段，如果非空但不以@开头，从description和上下文推断说话人
+ * v6.2.1修复：支持多种台词格式，自动识别说话人
+ * 格式1：已经@开头 → 保持不变
+ * 格式2：角色名（情绪）：台词 → 转换为@角色名：台词
+ * 格式3：角色名：台词 → 转换为@角色名：台词
+ * 格式4：角色名/角色名（情绪）：台词 → 取第一个角色名，转换为@角色名：台词
+ * 防止双重标注：如果台词已包含@角色名格式，不在外面再包@旁白
  */
 function applySpeakerAnnotation(scene) {
     var shots = scene.shots;
@@ -1167,22 +1175,78 @@ function applySpeakerAnnotation(scene) {
         var shot = shots[i];
         var dialogue = String(shot.dialogue || '').trim();
         
-        // 如果台词为空或已经以@开头，跳过
-        if (!dialogue || dialogue.indexOf('@') === 0) {
+        // 如果台词为空，跳过
+        if (!dialogue) {
             continue;
         }
         
-        // 尝试从description推断说话人
-        var inferredSpeaker = inferSpeakerFromContext(shot, scene, i);
+        // 如果已经以@开头（已正确标注），跳过
+        if (dialogue.indexOf('@') === 0) {
+            continue;
+        }
         
-        if (inferredSpeaker) {
-            console.log('[Dialogue Rules] 补全说话人: ' + dialogue + ' -> @' + inferredSpeaker + '：' + dialogue);
-            shot.dialogue = '@' + inferredSpeaker + '：' + dialogue;
+        // 尝试解析台词格式并转换
+        var parsedDialogue = parseDialogueFormat(dialogue, shot, scene, i);
+        if (parsedDialogue) {
+            shot.dialogue = parsedDialogue;
         } else {
-            console.log('[Dialogue Rules] 未能推断说话人，标注为旁白: ' + dialogue);
-            shot.dialogue = '@旁白：' + dialogue;
+            // 无法解析，从上下文推断
+            var inferredSpeaker = inferSpeakerFromContext(shot, scene, i);
+            if (inferredSpeaker) {
+                console.log('[Dialogue Rules] 补全说话人: ' + dialogue + ' -> @' + inferredSpeaker + '：' + dialogue);
+                shot.dialogue = '@' + inferredSpeaker + '：' + dialogue;
+            } else {
+                console.log('[Dialogue Rules] 未能推断说话人，标注为旁白: ' + dialogue);
+                shot.dialogue = '@旁白：' + dialogue;
+            }
         }
     }
+}
+
+/**
+ * 解析台词格式并转换为标准格式@角色名：台词
+ * 返回null表示解析失败，需要从上下文推断
+ * 优先级：多人格式（含/）> 情绪格式（无/但含括号）> 简单格式
+ */
+function parseDialogueFormat(dialogue, shot, scene, shotIndex) {
+    // 格式1：多人格式（台词包含/分隔符）
+    // 例如："队员甲/乙（惊愕）：啊！" → "@队员甲：啊！"
+    if (dialogue.indexOf('/') > 0) {
+        var multiMatch = dialogue.match(/^([^\/]+)\/[^（]+（[^）]+）[：:]\s*(.+)$/);
+        if (multiMatch && multiMatch.length >= 4) {
+            var speaker = multiMatch[1].trim();
+            var content = multiMatch[3].trim();
+            console.log('[Dialogue Rules] 解析多人格式: ' + dialogue + ' -> @' + speaker + '：' + content);
+            return '@' + speaker + '：' + content;
+        }
+    }
+    
+    // 格式2：情绪格式（台词包含中文括号但不包含/）
+    // 例如："队长（绝望）：携带空间异能的S级丧尸一起出手！" → "@队长：携带空间异能的S级丧尸一起出手！"
+    if (dialogue.indexOf('（') > 0 && dialogue.indexOf('/') < 0) {
+        var emotionMatch = dialogue.match(/^(.+?)（(.+?)）[：:]\s*(.+)$/);
+        if (emotionMatch && emotionMatch.length >= 4) {
+            var speaker = emotionMatch[1].trim();
+            var content = emotionMatch[3].trim();
+            console.log('[Dialogue Rules] 解析情绪格式: ' + dialogue + ' -> @' + speaker + '：' + content);
+            return '@' + speaker + '：' + content;
+        }
+    }
+    
+    // 格式3：简单格式（没有/和中文括号）
+    // 例如："张扬：和你说了多少遍"
+    var simpleMatch = dialogue.match(/^([^：：\s（）（]+)[：:]\s*(.+)$/);
+    if (simpleMatch && simpleMatch.length >= 3) {
+        var speaker = simpleMatch[1].trim();
+        var content = simpleMatch[2].trim();
+        // 确保说话人不是旁白或空白
+        if (speaker && speaker !== '旁白' && speaker.length > 0) {
+            console.log('[Dialogue Rules] 解析简单格式: ' + dialogue + ' -> @' + speaker + '：' + content);
+            return '@' + speaker + '：' + content;
+        }
+    }
+    
+    return null;
 }
 
 /**
@@ -1375,6 +1439,65 @@ function mergeBrokenDialogues(scene) {
 }
 
 /**
+ * 规则d：台词去重
+ * 确保同一分镜内没有重复台词
+ * 合并断裂对话时，检查两个shot的dialogue是否完全相同，相同则不合并
+ * 最终输出前，对每个shot的dialogue按行去重
+ */
+function deduplicateDialogues(scene) {
+    var shots = scene.shots;
+    var i = 0;
+    
+    // 步骤1：合并断裂对话时检查台词是否完全相同
+    while (i < shots.length - 1) {
+        var currentShot = shots[i];
+        var nextShot = shots[i + 1];
+        
+        var currentDialogue = String(currentShot.dialogue || '').trim();
+        var nextDialogue = String(nextShot.dialogue || '').trim();
+        
+        // 如果两个台词完全相同，不合并
+        if (currentDialogue && nextDialogue && currentDialogue === nextDialogue) {
+            console.log('[Dialogue Rules] 跳过合并：分镜' + (i + 1) + '和' + (i + 2) + '台词完全相同');
+            i++;
+            continue;
+        }
+        
+        i++;
+    }
+    
+    // 步骤2：对每个shot的dialogue按行去重
+    for (var j = 0; j < shots.length; j++) {
+        var shot = shots[j];
+        var dialogue = String(shot.dialogue || '').trim();
+        
+        if (!dialogue) continue;
+        
+        // 按行分割台词
+        var lines = dialogue.split(/\n/).map(function(l) { return l.trim(); }).filter(function(l) { return l; });
+        
+        // 去重：保留唯一行
+        var seen = {};
+        var uniqueLines = [];
+        var hasDuplicate = false;
+        
+        for (var k = 0; k < lines.length; k++) {
+            if (seen[lines[k]]) {
+                hasDuplicate = true;
+                console.log('[Dialogue Rules] 去除重复台词: ' + lines[k]);
+            } else {
+                seen[lines[k]] = true;
+                uniqueLines.push(lines[k]);
+            }
+        }
+        
+        if (hasDuplicate) {
+            shot.dialogue = uniqueLines.join('\n');
+        }
+    }
+}
+
+/**
  * 检查两个shot的场景是否高度相似（用于判断是否应该合并）
  * 注意：连续对话场景角色可能不同，但只要场景关键词重叠就可以合并
  */
@@ -1552,6 +1675,70 @@ function fixCameraMovementDiversity(shots) {
     }
 }
 
+/**
+ * v6.2.1 规则：描述多样性检查
+ * 遍历同一scene内的所有shots
+ * 如果连续2个shot的scene_description完全相同，为后一个shot添加差异化描述
+ * 差异化方式：在description前追加动作描述（从action_prompt提取）
+ */
+function applyDescriptionDiversity(scene) {
+    var shots = scene.shots;
+    if (!shots || shots.length < 2) return;
+    
+    console.log('[Director Engine] 执行描述多样性检查，共 ' + shots.length + ' 个分镜');
+    
+    for (var i = 1; i < shots.length; i++) {
+        var currentShot = shots[i];
+        var prevShot = shots[i - 1];
+        
+        var currentVp = currentShot.visual_prompt || {};
+        var prevVp = prevShot.visual_prompt || {};
+        
+        var currentDesc = String(currentVp.scene_description || '').trim();
+        var prevDesc = String(prevVp.scene_description || '').trim();
+        
+        // 检查scene_description是否完全相同
+        if (currentDesc && prevDesc && currentDesc === prevDesc) {
+            console.log('[Director Engine] 检测到连续相同描述: 分镜' + i + ' 与 分镜' + (i + 1) + ' - "' + currentDesc + '"');
+            
+            // 从action_prompt提取动作描述
+            var currentAction = '';
+            if (currentShot.action_prompt && currentShot.action_prompt.physical_action) {
+                currentAction = String(currentShot.action_prompt.physical_action).trim();
+            }
+            
+            if (currentAction) {
+                // 追加动作描述到scene_description前面
+                currentVp.scene_description = currentAction + '，' + currentDesc;
+                console.log('[Director Engine] 添加动作差异化: "' + currentAction + '，' + currentDesc + '"');
+            } else {
+                // 如果没有动作描述，尝试从original_text提取
+                var originalText = String(currentShot.original_text || '').trim();
+                if (originalText) {
+                    // 截取前20个字符作为补充描述
+                    var shortAction = originalText.substring(0, Math.min(20, originalText.length));
+                    currentVp.scene_description = shortAction + '，' + currentDesc;
+                    console.log('[Director Engine] 从original_text添加差异化: "' + shortAction + '，' + currentDesc + '"');
+                }
+            }
+        }
+        
+        // 检查character_placement是否完全相同
+        var currentCharPlacement = String(currentVp.character_placement || '').trim();
+        var prevCharPlacement = String(prevVp.character_placement || '').trim();
+        
+        if (currentCharPlacement && prevCharPlacement && currentCharPlacement === prevCharPlacement) {
+            console.log('[Director Engine] 检测到连续相同角色位置: 分镜' + i + ' 与 分镜' + (i + 1));
+            
+            // 添加景别信息作为区分
+            var currentShotType = currentShot.shot_type || '';
+            if (currentShotType) {
+                currentVp.character_placement = currentShotType + '镜头视角，' + currentCharPlacement;
+            }
+        }
+    }
+}
+
 function fixDurationReasonableness(shot, shotType) {
     var duration = shot.duration;
     var emotion = shot.emotion_cue && shot.emotion_cue.primary_emotion;
@@ -1604,6 +1791,7 @@ function applyDirectorEngine(data) {
         }
         fixShotTypeDiversity(scene.shots);
         fixCameraMovementDiversity(scene.shots);
+        applyDescriptionDiversity(scene);
         for (var i = 0; i < scene.shots.length; i++) {
             var shot = scene.shots[i];
             if (detectPowerUp(shot)) applyPowerUpEnhancement(shot);
