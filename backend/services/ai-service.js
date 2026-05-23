@@ -1303,49 +1303,89 @@ function applySpeakerAnnotation(scene) {
 }
 
 /**
- * 解析台词格式并转换为标准格式@角色名：台词
- * 返回null表示解析失败，需要从上下文推断
- * 优先级：多人格式（含/）> 情绪格式（无/但含括号）> 简单格式
+ * 解析单行台词，返回格式化的@角色名：台词
+ * 返回null表示解析失败
  */
-function parseDialogueFormat(dialogue, shot, scene, shotIndex) {
-    // 格式1：多人格式（台词包含/分隔符）
-    // 例如："队员甲/乙（惊愕）：啊！" → "@队员甲：啊！"
-    if (dialogue.indexOf('/') > 0) {
-        var multiMatch = dialogue.match(/^([^\/]+)\/[^（]+（[^）]+）[：:]\s*(.+)$/);
-        if (multiMatch && multiMatch.length >= 4) {
-            var speaker = multiMatch[1].trim();
-            var content = multiMatch[3].trim();
-            console.log('[Dialogue Rules] 解析多人格式: ' + dialogue + ' -> @' + speaker + '：' + content);
-            return '@' + speaker + '：' + content;
-        }
+function parseSingleLine(line) {
+    line = line.trim();
+    if (!line) return null;
+    
+    // 如果已经是@开头的格式，直接返回
+    if (line.indexOf('@') === 0) return line;
+    
+    // 格式A: "角色OS：台词" 或 "角色 OS：台词" → 旁白
+    var osPattern = line.match(/^(.+?)\s*OS[：:]/);
+    if (osPattern) {
+        var osContent = line.substring(line.indexOf('OS') + 2).replace(/^[：:]\s*/, '');
+        return '@旁白：' + osContent.trim();
     }
     
-    // 格式2：情绪格式（台词包含中文括号但不包含/）
-    // 例如："队长（绝望）：携带空间异能的S级丧尸一起出手！" → "@队长：携带空间异能的S级丧尸一起出手！"
-    if (dialogue.indexOf('（') > 0 && dialogue.indexOf('/') < 0) {
-        var emotionMatch = dialogue.match(/^(.+?)（(.+?)）[：:]\s*(.+)$/);
-        if (emotionMatch && emotionMatch.length >= 4) {
-            var speaker = emotionMatch[1].trim();
-            var content = emotionMatch[3].trim();
-            console.log('[Dialogue Rules] 解析情绪格式: ' + dialogue + ' -> @' + speaker + '：' + content);
-            return '@' + speaker + '：' + content;
-        }
+    // 找到普通对话的冒号位置
+    var colonPos = line.indexOf('：');
+    if (colonPos < 0) colonPos = line.indexOf(':');
+    if (colonPos < 0) return null;
+    
+    var beforeColon = line.substring(0, colonPos);
+    var afterColon = line.substring(colonPos + 1).trim();
+    
+    // 格式B: "角色名/角色名" → 取第一个
+    // 例如："队员甲/乙（惊愕）：啊！队长" → "@队员甲：啊！队长"
+    if (beforeColon.indexOf('/') > 0) {
+        var firstSpeaker = beforeColon.split('/')[0].trim();
+        // 去除情绪标注
+        firstSpeaker = firstSpeaker.replace(/[（(][^）)]+[）)]$/, '');
+        return '@' + firstSpeaker + '：' + afterColon;
     }
     
-    // 格式3：简单格式（没有/和中文括号）
-    // 例如："张扬：和你说了多少遍"
-    var simpleMatch = dialogue.match(/^([^：：\s（）（]+)[：:]\s*(.+)$/);
-    if (simpleMatch && simpleMatch.length >= 3) {
-        var speaker = simpleMatch[1].trim();
-        var content = simpleMatch[2].trim();
-        // 确保说话人不是旁白或空白
-        if (speaker && speaker !== '旁白' && speaker.length > 0) {
-            console.log('[Dialogue Rules] 解析简单格式: ' + dialogue + ' -> @' + speaker + '：' + content);
-            return '@' + speaker + '：' + content;
-        }
+    // 格式C: "角色名（情绪）" → 去除情绪
+    // 例如："队长（震惊）：你到底是什么人？" → "@队长：你到底是什么人？"
+    var emotionMatch = beforeColon.match(/^(.+?)[（(].+?[）)]$/);
+    if (emotionMatch) {
+        return '@' + emotionMatch[1].trim() + '：' + afterColon;
+    }
+    
+    // 格式D: 普通角色名
+    if (beforeColon && beforeColon !== '旁白' && beforeColon.trim().length > 0) {
+        return '@' + beforeColon.trim() + '：' + afterColon;
     }
     
     return null;
+}
+
+/**
+ * 解析台词格式并转换为标准格式@角色名：台词
+ * 支持多行对话，逐行解析
+ * 返回null表示解析失败，需要从上下文推断
+ */
+function parseDialogueFormat(dialogue, shot, scene, shotIndex) {
+    if (!dialogue || !dialogue.trim()) return null;
+    
+    // 按换行符拆分多行对话
+    var lines = dialogue.split(/\n/);
+    
+    if (lines.length === 1) {
+        // 单行对话，直接解析
+        var result = parseSingleLine(lines[0]);
+        if (result) {
+            console.log('[Dialogue Rules] 解析台词: ' + dialogue + ' -> ' + result);
+        }
+        return result;
+    }
+    
+    // 多行对话，逐行解析后重新拼接
+    var parsedLines = [];
+    for (var i = 0; i < lines.length; i++) {
+        var parsed = parseSingleLine(lines[i]);
+        if (parsed) {
+            console.log('[Dialogue Rules] 解析台词(行' + (i+1) + '): ' + lines[i] + ' -> ' + parsed);
+            parsedLines.push(parsed);
+        } else {
+            // 解析失败的行，保留原样
+            parsedLines.push(lines[i]);
+        }
+    }
+    
+    return parsedLines.join('\n');
 }
 
 /**
