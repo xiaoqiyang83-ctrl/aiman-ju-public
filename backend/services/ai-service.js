@@ -2666,43 +2666,84 @@ function enforceDialogueFromScript(data, scriptContent) {
         for (var ui = 0; ui < unmatched.length; ui++) {
             var ud = unmatched[ui];
             var correctText = '@' + ud.speaker + '：' + ud.text;
-            // 找到包含该说话人的场景，追加到最后一个无台词的shot
+            
+            // 优先找到台词内容与场景标题/地点匹配的场景
             var inserted = false;
+            var bestSceneIdx = -1;
+            var bestSceneScore = 0;
+            
             for (var si = 0; si < data.scenes.length; si++) {
                 var scene = data.scenes[si];
                 if (!Array.isArray(scene.shots)) continue;
-                // 检查场景角色是否包含该说话人
+                
+                // 检查该场景是否有这个角色
                 var hasChar = false;
                 for (var ci = 0; ci < (scene.characters || []).length; ci++) {
                     if (scene.characters[ci] === ud.speaker) { hasChar = true; break; }
                 }
                 if (!hasChar) {
-                    // 也检查shot的dialogue和description里是否提到这个角色
                     for (var sh = 0; sh < scene.shots.length; sh++) {
                         var shotText = String(scene.shots[sh].dialogue || '') + String(scene.shots[sh].description || '');
                         if (shotText.indexOf(ud.speaker) >= 0) { hasChar = true; break; }
                     }
                 }
-                if (hasChar) {
-                    // 找该场景中最后一个没有台词的shot
-                    for (var sh = scene.shots.length - 1; sh >= 0; sh--) {
-                        if (!String(scene.shots[sh].dialogue || '').trim()) {
-                            scene.shots[sh].dialogue = correctText;
-                            inserted = true;
-                            console.log('[Dialogue Enforce] 补入台词到场景' + (si + 1) + '镜头' + (sh + 1) + ': ' + correctText.substring(0, 30));
-                            break;
-                        }
+                if (!hasChar) continue;
+                
+                // 计算台词内容与场景的匹配度
+                var sceneMatchScore = 0;
+                var sceneTitle = String(scene.title || scene.location || '');
+                // 台词中包含场景标题关键词
+                var titleParts = sceneTitle.split(/[-—\s··:：]/);
+                for (var tp = 0; tp < titleParts.length; tp++) {
+                    if (titleParts[tp].trim().length >= 2 && ud.text.indexOf(titleParts[tp].trim()) >= 0) {
+                        sceneMatchScore += 10;
                     }
-                    if (!inserted) {
-                        // 所有shot都有台词了，追加到最后一个shot
-                        var lastShot = scene.shots[scene.shots.length - 1];
-                        if (lastShot) {
-                            lastShot.dialogue = lastShot.dialogue + '\n' + correctText;
-                            inserted = true;
-                            console.log('[Dialogue Enforce] 追加台词到场景' + (si + 1) + '最后镜头: ' + correctText.substring(0, 30));
-                        }
+                }
+                // 场景已有台词内容与未分配台词有共同关键词
+                for (var sh = 0; sh < scene.shots.length; sh++) {
+                    var existingD = String(scene.shots[sh].dialogue || '');
+                    if (existingD.indexOf(ud.speaker) >= 0) sceneMatchScore += 3;
+                }
+                // 场景中有空镜头可以放入
+                for (var sh = 0; sh < scene.shots.length; sh++) {
+                    if (!String(scene.shots[sh].dialogue || '').trim()) { sceneMatchScore += 1; break; }
+                }
+                
+                if (sceneMatchScore > bestSceneScore) {
+                    bestSceneScore = sceneMatchScore;
+                    bestSceneIdx = si;
+                }
+            }
+            
+            // 如果没有内容匹配，退回到第一个包含该角色的场景
+            if (bestSceneIdx < 0) {
+                for (var si = 0; si < data.scenes.length; si++) {
+                    var scene = data.scenes[si];
+                    var hasChar = false;
+                    for (var ci = 0; ci < (scene.characters || []).length; ci++) {
+                        if (scene.characters[ci] === ud.speaker) { hasChar = true; break; }
                     }
-                    if (inserted) break;
+                    if (hasChar) { bestSceneIdx = si; break; }
+                }
+            }
+            
+            if (bestSceneIdx >= 0) {
+                var scene = data.scenes[bestSceneIdx];
+                for (var sh = scene.shots.length - 1; sh >= 0; sh--) {
+                    if (!String(scene.shots[sh].dialogue || '').trim()) {
+                        scene.shots[sh].dialogue = correctText;
+                        inserted = true;
+                        console.log('[Dialogue Enforce] 补入台词到场景' + (bestSceneIdx + 1) + '镜头' + (sh + 1) + ': ' + correctText.substring(0, 30));
+                        break;
+                    }
+                }
+                if (!inserted) {
+                    var lastShot = scene.shots[scene.shots.length - 1];
+                    if (lastShot) {
+                        lastShot.dialogue = lastShot.dialogue + '\n' + correctText;
+                        inserted = true;
+                        console.log('[Dialogue Enforce] 追加台词到场景' + (bestSceneIdx + 1) + '最后镜头: ' + correctText.substring(0, 30));
+                    }
                 }
             }
         }
