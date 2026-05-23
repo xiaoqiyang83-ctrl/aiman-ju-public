@@ -2270,6 +2270,183 @@ function diversifyFieldValue(shot, field, originalValue, shotIndex) {
     return originalValue;
 }
 
+/**
+ * v7.0.3 强制场景拆分
+ * 如果AI把多个场景合并成一个，根据剧本原文的场景标题强制拆分
+ * 逻辑：从剧本原文提取场景标题列表，如果AI返回的场景数少于预期，则拆分
+ */
+function enforceSceneSplit(data, scriptContent) {
+    if (!data || !Array.isArray(data.scenes) || !scriptContent) return data;
+    
+    // 从剧本原文提取场景标题
+    var scriptScenes = extractSceneHeadingsFromScript(scriptContent);
+    if (scriptScenes.length <= 1) return data; // 剧本只有1个场景，不需要拆
+    if (data.scenes.length >= scriptScenes.length) return data; // AI已经正确拆分了
+    
+    console.log('[Scene Split] AI返回 ' + data.scenes.length + ' 个场景，但剧本有 ' + scriptScenes.length + ' 个场景标题，强制拆分');
+    
+    // 找到被合并的场景（通常是shots最多的那个scene）
+    var mergedSceneIdx = 0;
+    var maxShots = 0;
+    for (var si = 0; si < data.scenes.length; si++) {
+        if (data.scenes[si].shots && data.scenes[si].shots.length > maxShots) {
+            maxShots = data.scenes[si].shots.length;
+            mergedSceneIdx = si;
+        }
+    }
+    
+    var mergedScene = data.scenes[mergedSceneIdx];
+    var allShots = mergedScene.shots || [];
+    
+    if (allShots.length < scriptScenes.length) {
+        // shots比场景还少，无法拆分，放弃
+        console.log('[Scene Split] shots数量(' + allShots.length + ')少于场景数(' + scriptScenes.length + ')，无法拆分');
+        return data;
+    }
+    
+    // 根据场景标题的location匹配shots
+    // 策略：按shots数量均分到各场景，或者根据dialogue/original_text中的关键词匹配
+    var newScenes = [];
+    
+    // 保留非合并的场景
+    for (var si = 0; si < data.scenes.length; si++) {
+        if (si !== mergedSceneIdx) {
+            newScenes.push(data.scenes[si]);
+        }
+    }
+    
+    // 拆分合并场景
+    // 计算每个新场景应该分配多少shots
+    var shotsPerScene = Math.ceil(allShots.length / scriptScenes.length);
+    
+    for (var sci = 0; sci < scriptScenes.length; sci++) {
+        var sceneSpec = scriptScenes[sci];
+        var startIdx = sci * shotsPerScene;
+        var endIdx = Math.min(startIdx + shotsPerScene, allShots.length);
+        var sceneShots = allShots.slice(startIdx, endIdx);
+        
+        if (sceneShots.length === 0) continue;
+        
+        // 重新编号shots
+        for (var j = 0; j < sceneShots.length; j++) {
+            sceneShots[j].shot_number = j + 1;
+        }
+        
+        newScenes.push({
+            episode: sceneSpec.episode || mergedScene.episode || '1',
+            scene_number: String(sci + 1),
+            title: sceneSpec.title || sceneSpec.location || ('场景' + (sci + 1)),
+            location: sceneSpec.location || sceneSpec.title || '',
+            time_of_day: sceneSpec.time_of_day || mergedScene.time_of_day || '日内',
+            characters: mergedScene.characters || [],
+            content: sceneSpec.content || '',
+            shots: sceneShots
+        });
+        
+        console.log('[Scene Split] 创建场景' + (sci + 1) + ': ' + (sceneSpec.title || sceneSpec.location) + ' (' + sceneShots.length + '个镜头)');
+    }
+    
+    // 按场景编号排序
+    newScenes.sort(function(a, b) { return parseInt(a.scene_number) - parseInt(b.scene_number); });
+    
+    data.scenes = newScenes;
+    return data;
+}
+
+/**
+ * 从剧本原文提取场景标题列表
+ */
+function extractSceneHeadingsFromScript(scriptContent) {
+    var scenes = [];
+    var lines = String(scriptContent || '').split(/\n/);
+    var currentEpisode = '';
+    
+    for (var i = 0; i < lines.length; i++) {
+        var line = String(lines[i] || '').trim();
+        if (!line) continue;
+        
+        // 检测集号
+        var epMatch = line.match(/^第([一二三四五六七八九十百千0-9]+)(集|话|章)\b/);
+        if (epMatch) {
+            currentEpisode = line;
+            continue;
+        }
+        
+        // 检测场景标题：场景一：、场景二：、1-1 等
+        // 格式1: 场景X：地点
+        var m1 = line.match(/^场景\s*([一二三四五六七八九十百千0-9]+)\s*[：:]\s*(.+)$/);
+        if (m1) {
+            scenes.push({
+                scene_number: m1[1],
+                title: m1[2].trim(),
+                location: m1[2].trim(),
+                time_of_day: '',
+                episode: currentEpisode
+            });
+            continue;
+        }
+        
+        // 格式2: 场景X（地点-时间）
+        var m2 = line.match(/^场景\s*([一二三四五六七八九十百千0-9]+)\s*[（(](.+?)[)）]\s*$/);
+        if (m2) {
+            scenes.push({
+                scene_number: m2[1],
+                title: m2[2].trim(),
+                location: m2[2].trim(),
+                time_of_day: '',
+                episode: currentEpisode
+            });
+            continue;
+        }
+        
+        // 格式3: 带连字符的场景标题 (如 "场景一：工厂农场-温室")
+        var m3 = line.match(/^场景\s*([一二三四五六七八九十百千0-9]+)\s*[：:]\s*(.+)$/);
+        if (m3) {
+            scenes.push({
+                scene_number: m3[1],
+                title: m3[2].trim(),
+                location: m3[2].trim(),
+                time_of_day: '',
+                episode: currentEpisode
+            });
+            continue;
+        }
+        
+        // 格式4: 剧本编号格式 "1-1 地点 日内"
+        var m4 = line.match(/^(\d+)\s*-\s*(\d+)\s+(.+)$/);
+        if (m4 && line.length <= 40 && !/[。！？.!?]/.test(line)) {
+            var rest = m4[3].trim();
+            var timeMatch = rest.match(/(日内|日外|夜内|夜外|日|夜|晨|晚|黄昏|凌晨)/);
+            var timeOfDay = timeMatch ? timeMatch[1] : '';
+            var loc = rest.replace(/(日内|日外|夜内|夜外|日|夜|晨|晚|黄昏|凌晨)/g, '').trim();
+            scenes.push({
+                scene_number: m4[1] + '-' + m4[2],
+                title: loc || line,
+                location: loc,
+                time_of_day: timeOfDay,
+                episode: m4[1]
+            });
+            continue;
+        }
+        
+        // 格式5: 含-的场景标题（不含句号感叹号，短于40字）
+        if (line.length <= 40 && (line.includes('-') || line.includes('—')) && !/[。！？.!?""「」《》]/.test(line) && !/第.+(卷|集|章)/.test(line)) {
+            // 排除以角色名+冒号开头的台词行
+            if (/^[^：:]{1,10}[：:]/.test(line)) continue;
+            scenes.push({
+                scene_number: String(scenes.length + 1),
+                title: line,
+                location: line,
+                time_of_day: '',
+                episode: currentEpisode
+            });
+            continue;
+        }
+    }
+    
+    return scenes;
+}
+
 function fixDurationReasonableness(shot, shotType) {
     var duration = shot.duration;
     var emotion = shot.emotion_cue && shot.emotion_cue.primary_emotion;
@@ -2444,6 +2621,8 @@ async function generateStoryboardFromScript(params) {
     var jsonText = extractFirstJsonObject(result.content);
     var parsed = parseJsonWithFallback(jsonText);
     var normalized = normalizeStoryboard(parsed);
+    // v7.0.3 强制场景拆分：如果AI合并了多个场景，根据剧本原文强制拆分
+    normalized = enforceSceneSplit(normalized, scriptContent);
     // 应用导演规则引擎进行确定性修正
     normalized = applyDirectorEngine(normalized);
     var compiled = compilePromptsForStoryboard(normalized);
