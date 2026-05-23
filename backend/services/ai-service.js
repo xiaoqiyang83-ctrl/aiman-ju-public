@@ -2179,12 +2179,12 @@ function applyDescriptionDiversity(scene) {
             
             if (seenValues[val]) {
                 // 找到重复值，需要差异化
-                console.log("[Director Engine] 检测到重复" + field + ": 分镜" + (i + 1) + " 与 分镜" + seenValues[val] + " - "" + val.substring(0, 30) + "..."");
+                console.log("[Director Engine] 检测到重复" + field + ": 分镜" + (i + 1) + " 与 分镜" + seenValues[val] + " - " + val.substring(0, 30) + "...");
                 
                 var diversified = diversifyFieldValue(shot, field, val, i);
                 if (diversified !== val) {
                     vp[field] = diversified;
-                    console.log("[Director Engine] 差异化修复: "" + diversified.substring(0, 40) + "..."");
+                    console.log("[Director Engine] 差异化修复: " + diversified.substring(0, 40) + "...");
                 }
             } else {
                 seenValues[val] = i + 1;
