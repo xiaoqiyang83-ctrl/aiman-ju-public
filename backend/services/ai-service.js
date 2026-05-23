@@ -2292,72 +2292,255 @@ function enforceSceneSplit(data, scriptContent) {
     
     console.log('[Scene Split] AI返回 ' + data.scenes.length + ' 个场景，但剧本有 ' + scriptScenes.length + ' 个场景标题，强制拆分');
     
-    // 找到被合并的场景（通常是shots最多的那个scene）
-    var mergedSceneIdx = 0;
-    var maxShots = 0;
+    // 收集所有shots到一个池子
+    var allShots = [];
     for (var si = 0; si < data.scenes.length; si++) {
-        if (data.scenes[si].shots && data.scenes[si].shots.length > maxShots) {
-            maxShots = data.scenes[si].shots.length;
-            mergedSceneIdx = si;
+        var sceneShots = data.scenes[si].shots || [];
+        for (var j = 0; j < sceneShots.length; j++) {
+            allShots.push(sceneShots[j]);
         }
     }
     
-    var mergedScene = data.scenes[mergedSceneIdx];
-    var allShots = mergedScene.shots || [];
-    
     if (allShots.length < scriptScenes.length) {
-        // shots比场景还少，无法拆分，放弃
         console.log('[Scene Split] shots数量(' + allShots.length + ')少于场景数(' + scriptScenes.length + ')，无法拆分');
         return data;
     }
     
-    // 根据场景标题的location匹配shots
-    // 策略：按shots数量均分到各场景，或者根据dialogue/original_text中的关键词匹配
-    var newScenes = [];
+    // 从剧本原文按场景标题切分出每个场景的文本段落
+    var sceneTexts = splitScriptBySceneHeadings(scriptContent, scriptScenes);
     
-    // 保留非合并的场景
-    for (var si = 0; si < data.scenes.length; si++) {
-        if (si !== mergedSceneIdx) {
-            newScenes.push(data.scenes[si]);
+    // 为每个场景段落提取关键词（角色名、地点词、特征词）
+    var sceneKeywords = [];
+    for (var sci = 0; sci < scriptScenes.length; sci++) {
+        var keywords = extractSceneKeywords(scriptScenes[sci], sceneTexts[sci] || '');
+        sceneKeywords.push(keywords);
+        console.log('[Scene Split] 场景' + (sci + 1) + ' ' + (scriptScenes[sci].title || '') + ' 关键词: ' + keywords.join(', '));
+    }
+    
+    // 基于内容匹配将shots分配到场景
+    // 每个shot计算与每个场景的匹配度，分配到最高匹配的场景
+    var sceneShotBuckets = [];
+    for (var sci = 0; sci < scriptScenes.length; sci++) {
+        sceneShotBuckets.push([]);
+    }
+    var unassigned = [];
+    
+    for (var i = 0; i < allShots.length; i++) {
+        var shot = allShots[i];
+        var bestScene = -1;
+        var bestScore = 0;
+        
+        var shotText = getShotMatchableText(shot);
+        
+        for (var sci = 0; sci < scriptScenes.length; sci++) {
+            var score = calcMatchScore(shotText, sceneKeywords[sci]);
+            if (score > bestScore) {
+                bestScore = score;
+                bestScene = sci;
+            }
+        }
+        
+        if (bestScene >= 0 && bestScore > 0) {
+            sceneShotBuckets[bestScene].push(shot);
+        } else {
+            unassigned.push(shot);
         }
     }
     
-    // 拆分合并场景
-    // 计算每个新场景应该分配多少shots
-    var shotsPerScene = Math.ceil(allShots.length / scriptScenes.length);
+    // 将未匹配的shots按顺序分配到最空的场景
+    for (var ui = 0; ui < unassigned.length; ui++) {
+        var minLen = Infinity;
+        var minIdx = 0;
+        for (var sci = 0; sci < scriptScenes.length; sci++) {
+            if (sceneShotBuckets[sci].length < minLen) {
+                minLen = sceneShotBuckets[sci].length;
+                minIdx = sci;
+            }
+        }
+        sceneShotBuckets[minIdx].push(unassigned[ui]);
+    }
     
+    // 构建新场景列表
+    var newScenes = [];
     for (var sci = 0; sci < scriptScenes.length; sci++) {
         var sceneSpec = scriptScenes[sci];
-        var startIdx = sci * shotsPerScene;
-        var endIdx = Math.min(startIdx + shotsPerScene, allShots.length);
-        var sceneShots = allShots.slice(startIdx, endIdx);
+        var shots = sceneShotBuckets[sci];
         
-        if (sceneShots.length === 0) continue;
+        if (shots.length === 0) continue;
         
         // 重新编号shots
-        for (var j = 0; j < sceneShots.length; j++) {
-            sceneShots[j].shot_number = j + 1;
+        for (var j = 0; j < shots.length; j++) {
+            shots[j].shot_number = j + 1;
         }
         
         newScenes.push({
-            episode: sceneSpec.episode || mergedScene.episode || '1',
+            episode: sceneSpec.episode || '1',
             scene_number: String(sci + 1),
             title: sceneSpec.title || sceneSpec.location || ('场景' + (sci + 1)),
             location: sceneSpec.location || sceneSpec.title || '',
-            time_of_day: sceneSpec.time_of_day || mergedScene.time_of_day || '日内',
-            characters: mergedScene.characters || [],
-            content: sceneSpec.content || '',
-            shots: sceneShots
+            time_of_day: sceneSpec.time_of_day || '日内',
+            characters: extractCharactersFromShots(shots),
+            content: (sceneTexts[sci] || '').substring(0, 500),
+            shots: shots
         });
         
-        console.log('[Scene Split] 创建场景' + (sci + 1) + ': ' + (sceneSpec.title || sceneSpec.location) + ' (' + sceneShots.length + '个镜头)');
+        console.log('[Scene Split] 创建场景' + (sci + 1) + ': ' + (sceneSpec.title || sceneSpec.location) + ' (' + shots.length + '个镜头)');
     }
-    
-    // 按场景编号排序
-    newScenes.sort(function(a, b) { return parseInt(a.scene_number) - parseInt(b.scene_number); });
     
     data.scenes = newScenes;
     return data;
+}
+
+/**
+ * 从剧本原文按场景标题切分文本段落
+ */
+function splitScriptBySceneHeadings(scriptContent, sceneHeadings) {
+    var lines = String(scriptContent || '').split('\n');
+    var paragraphs = [];
+    var currentPara = '';
+    var headingLineIndices = [];
+    
+    // 找出所有场景标题行的位置
+    for (var i = 0; i < lines.length; i++) {
+        var line = String(lines[i] || '').trim();
+        for (var hi = 0; hi < sceneHeadings.length; hi++) {
+            var heading = String(sceneHeadings[hi].title || sceneHeadings[hi].location || '').trim();
+            if (heading && line.indexOf(heading) >= 0) {
+                headingLineIndices.push({ lineIdx: i, sceneIdx: hi });
+                break;
+            }
+        }
+    }
+    
+    // 按行号排序
+    headingLineIndices.sort(function(a, b) { return a.lineIdx - b.lineIdx; });
+    
+    // 切分段落
+    var result = [];
+    for (var hi = 0; hi < sceneHeadings.length; hi++) {
+        result.push('');
+    }
+    
+    for (var i = 0; i < headingLineIndices.length; i++) {
+        var startLine = headingLineIndices[i].lineIdx;
+        var endLine = (i + 1 < headingLineIndices.length) ? headingLineIndices[i + 1].lineIdx : lines.length;
+        var sceneIdx = headingLineIndices[i].sceneIdx;
+        var text = '';
+        for (var li = startLine; li < endLine; li++) {
+            text += lines[li] + '\n';
+        }
+        result[sceneIdx] = text.trim();
+    }
+    
+    return result;
+}
+
+/**
+ * 从场景标题和文本段落提取关键词
+ */
+function extractSceneKeywords(sceneSpec, sceneText) {
+    var keywords = [];
+    var title = String(sceneSpec.title || sceneSpec.location || '');
+    
+    // 从标题提取关键词（拆分-和常见分隔符）
+    var titleParts = title.split(/[-—\s··:：]/);
+    for (var i = 0; i < titleParts.length; i++) {
+        var part = titleParts[i].trim();
+        if (part.length >= 2) keywords.push(part);
+    }
+    
+    // 从文本段落提取角色名（X说、@X、X：模式）
+    var charMatches = sceneText.match(/[@\uff20]?([\u4e00-\u9fa5]{1,4})[\s：:说喊叫道笑哭骂吼]/g);
+    if (charMatches) {
+        for (var i = 0; i < charMatches.length; i++) {
+            var name = charMatches[i].replace(/^[@\uff20]/, '').replace(/[\s：:说喊叫道笑哭骂吼]/g, '');
+            if (name.length >= 2 && name.length <= 4 && keywords.indexOf(name) < 0) {
+                keywords.push(name);
+            }
+        }
+    }
+    
+    // 从文本提取地点特征词（常见的环境词）
+    var envWords = ['工厂', '农场', '走廊', '温室', '大棚', '办公室', '宿舍', '仓库', '实验室', 
+                    '医院', '手术室', '地下室', '天台', '街道', '小巷', '森林', '荒漠', '海边',
+                    '码头', '战场', '废墟', '教室', '监狱', '基地', '营地'];
+    for (var i = 0; i < envWords.length; i++) {
+        if (sceneText.indexOf(envWords[i]) >= 0 && keywords.indexOf(envWords[i]) < 0) {
+            keywords.push(envWords[i]);
+        }
+    }
+    
+    // 从文本提取关键动作/物品词（取出现2次以上的2-4字词）
+    var wordCounts = {};
+    var wordList = sceneText.match(/[\u4e00-\u9fa5]{2,4}/g) || [];
+    for (var i = 0; i < wordList.length; i++) {
+        var w = wordList[i];
+        wordCounts[w] = (wordCounts[w] || 0) + 1;
+    }
+    var topWords = Object.keys(wordCounts).sort(function(a, b) { return wordCounts[b] - wordCounts[a]; });
+    for (var i = 0; i < Math.min(8, topWords.length); i++) {
+        if (wordCounts[topWords[i]] >= 2 && keywords.indexOf(topWords[i]) < 0) {
+            keywords.push(topWords[i]);
+        }
+    }
+    
+    return keywords;
+}
+
+/**
+ * 获取shot的可匹配文本（合并dialogue、original_text、description等）
+ */
+function getShotMatchableText(shot) {
+    var parts = [];
+    if (shot.dialogue) parts.push(String(shot.dialogue));
+    if (shot.original_text) parts.push(String(shot.original_text));
+    if (shot.narration) parts.push(String(shot.narration));
+    if (shot.description) parts.push(String(shot.description));
+    if (shot.action_description) parts.push(String(shot.action_description));
+    var vp = shot.visual_prompt;
+    if (vp && typeof vp === 'object') {
+        if (vp.scene_description) parts.push(String(vp.scene_description));
+        if (vp.character_placement) parts.push(String(vp.character_placement));
+    }
+    return parts.join(' ');
+}
+
+/**
+ * 计算shot文本与场景关键词的匹配度
+ */
+function calcMatchScore(shotText, keywords) {
+    if (!keywords || keywords.length === 0) return 0;
+    var score = 0;
+    var text = shotText.toLowerCase();
+    for (var i = 0; i < keywords.length; i++) {
+        var kw = keywords[i].toLowerCase();
+        if (text.indexOf(kw) >= 0) {
+            // 标题词权重更高（前几个词通常来自标题）
+            score += (i < 3) ? 3 : 1;
+        }
+    }
+    return score;
+}
+
+/**
+ * 从shots中提取出场角色
+ */
+function extractCharactersFromShots(shots) {
+    var charSet = {};
+    for (var i = 0; i < shots.length; i++) {
+        var dialogue = String(shots[i].dialogue || '');
+        var desc = String(shots[i].description || shots[i].action_description || '');
+        var text = dialogue + ' ' + desc;
+        // 匹配@角色名
+        var atMatches = text.match(/[@\uff20]([\u4e00-\u9fa5]{1,4})/g);
+        if (atMatches) {
+            for (var j = 0; j < atMatches.length; j++) {
+                var name = atMatches[j].replace(/^[@\uff20]/, '');
+                charSet[name] = true;
+            }
+        }
+    }
+    return Object.keys(charSet);
 }
 
 /**
