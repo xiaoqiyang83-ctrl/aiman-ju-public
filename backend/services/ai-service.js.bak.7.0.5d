@@ -1047,20 +1047,56 @@ function normalizeStoryboard(data) {
         }
     }
     
-    // v7.0.6 彻底修复：不再从scene.content或original_text提取台词
-    // 之前的兜底逻辑从AI写的scene.content/original_text提取台词，这些内容本身就是AI编造的
-    // 现在统一清空所有AI返回的dialogue，由enforceDialogueFromScript从剧本原文重新分配
-    // 这样彻底杜绝编造台词进入数据
+    // 台词兜底：如果AI没给dialogue，从场景原文提取并分配
+    // v7.0.3修复：如果超过一半镜头没台词也触发兜底（之前只有全部没台词才触发）
     for (var si = 0; si < data.scenes.length; si++) {
         var scene = data.scenes[si];
         if (!Array.isArray(scene.shots) || !scene.shots.length) continue;
-        for (var i = 0; i < scene.shots.length; i++) {
-            scene.shots[i].dialogue = '';
-            // original_text也不可信，清空避免后续被误用
-            // scene.shots[i].original_text = ''; // 保留original_text给其他用途
+        
+        var nonEmptyCount = scene.shots.filter(function(s) { return String(s.dialogue || '').trim(); }).length;
+        // 如果大部分镜头都没台词，尝试从场景原文提取
+        if (nonEmptyCount < scene.shots.length / 2 && scene.content) {
+            var dialogues = extractDialoguesFromSceneContent(scene.content);
+            if (dialogues.length > 0) {
+                var dIdx = 0;
+                for (var i = 0; i < scene.shots.length; i++) {
+                    if (!String(scene.shots[i].dialogue || '').trim() && dIdx < dialogues.length) {
+                        scene.shots[i].dialogue = dialogues[dIdx];
+                        dIdx++;
+                    }
+                    // 同时补original_text
+                    if (!String(scene.shots[i].original_text || '').trim()) {
+                        scene.shots[i].original_text = scene.shots[i].dialogue || scene.content;
+                    }
+                }
+                // 多余台词追加到最后一个镜头
+                while (dIdx < dialogues.length) {
+                    var lastShot = scene.shots[scene.shots.length - 1];
+                    if (lastShot) {
+                        lastShot.dialogue = lastShot.dialogue ? lastShot.dialogue + '；' + dialogues[dIdx] : dialogues[dIdx];
+                    }
+                    dIdx++;
+                }
+            } else {
+                // 从每个镜头的original_text里提取引号台词
+                for (var i = 0; i < scene.shots.length; i++) {
+                    var orig = String(scene.shots[i].original_text || '').trim();
+                    if (!orig) {
+                        scene.shots[i].original_text = scene.content;
+                        orig = scene.content;
+                    }
+                    var quotedMatch = String(orig).match(/"([^"]+)"|「([^」]+)」|"([^"]+)"/);
+                    if (quotedMatch) {
+                        scene.shots[i].dialogue = (quotedMatch[1] || quotedMatch[2] || quotedMatch[3] || '').trim();
+                    }
+                    if (!scene.shots[i].dialogue) {
+                        var colonMatch = String(orig).match(/[\u4e00-\u9fa5]{1,8}[：:]\s*(.+)$/);
+                        if (colonMatch) scene.shots[i].dialogue = String(colonMatch[1] || '').trim();
+                    }
+                }
+            }
         }
     }
-    console.log('[normalizeStoryboard] v7.0.6: 已清空所有AI返回的dialogue，将由enforceDialogueFromScript从剧本原文分配');
     
     return data;
 }
@@ -2712,20 +2748,12 @@ function enforceDialogueFromScript(data, scriptContent) {
                     }
                 }
                 if (!inserted) {
-                    // v7.0.6 不再追加到最后一个shot（会导致多条台词堆叠）
-                    // 而是新建一个shot专门放这条台词
                     var lastShot = scene.shots[scene.shots.length - 1];
-                    var newShot = deepClone(lastShot);
-                    newShot.dialogue = correctText;
-                    newShot.shot_number = scene.shots.length + 1;
-                    newShot.duration = 3;
-                    // 重新生成visual_prompt的scene_description为台词相关内容
-                    if (newShot.visual_prompt) {
-                        newShot.visual_prompt.scene_description = ud.speaker + '说话';
+                    if (lastShot) {
+                        lastShot.dialogue = lastShot.dialogue + '\n' + correctText;
+                        inserted = true;
+                        console.log('[Dialogue Enforce] 追加台词到场景' + (bestSceneIdx + 1) + '最后镜头: ' + correctText.substring(0, 30));
                     }
-                    scene.shots.push(newShot);
-                    inserted = true;
-                    console.log('[Dialogue Enforce] 新建镜头放入台词到场景' + (bestSceneIdx + 1) + '镜头' + scene.shots.length + ': ' + correctText.substring(0, 30));
                 }
             }
         }
@@ -3109,10 +3137,37 @@ async function generateStoryboardFromScript(params) {
     var parsed = parseJsonWithFallback(jsonText);
     var normalized = normalizeStoryboard(parsed);
     
-    // v7.0.6 彻底重构台词pipeline：
-    // normalizeStoryboard已清空所有AI返回的dialogue（不可信）
-    // 不再需要Pre-Enforce（因为dialogue已经是空的了）
-    // 直接由enforceDialogueFromScript从剧本原文分配台词
+    // v7.0.5d 关键修复：清空normalizeStoryboard从scene.content兜底提取的台词
+    // normalizeStoryboard的台词兜底逻辑从AI写的scene.content提取台词，不可信（可能编造）
+    // 清空后由enforceDialogueFromScript统一从剧本原文重新分配
+    var scriptDialogues = extractAllDialoguesFromScript(scriptContent);
+    if (scriptDialogues.length > 0) {
+        // 有剧本台词才清空，否则保留兜底结果（聊胜于无）
+        for (var si = 0; si < normalized.scenes.length; si++) {
+            var scene = normalized.scenes[si];
+            if (!Array.isArray(scene.shots)) continue;
+            for (var i = 0; i < scene.shots.length; i++) {
+                var d = String(scene.shots[i].dialogue || '').trim();
+                if (d) {
+                    // 检查这条台词是否在剧本原文中存在
+                    var found = false;
+                    var dPureText = stripDialogueMarkup(d);
+                    for (var di = 0; di < scriptDialogues.length; di++) {
+                        var sPureText = stripDialogueMarkup(scriptDialogues[di].text);
+                        if (sPureText === dPureText || dPureText.indexOf(sPureText) >= 0 || sPureText.indexOf(dPureText) >= 0) {
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found) {
+                        // 台词不在剧本中，清空，让enforceDialogueFromScript重新分配
+                        console.log('[Pre-Enforce] 清空不可信台词: "' + d.substring(0, 30) + '..."');
+                        scene.shots[i].dialogue = '';
+                    }
+                }
+            }
+        }
+    }
     
     // v7.0.3 强制场景拆分：如果AI合并了多个场景，根据剧本原文强制拆分
     try {
@@ -3120,7 +3175,7 @@ async function generateStoryboardFromScript(params) {
     } catch(e) {
         console.log('[Scene Split] 执行出错: ' + (e && e.message));
     }
-    // v7.0.6 从剧本原文分配台词到场景（唯一台词来源）
+    // v7.0.5 强制台词校验：用剧本原文的真实台词替换AI编造的台词
     try {
         normalized = enforceDialogueFromScript(normalized, scriptContent);
     } catch(e) {
@@ -3128,9 +3183,7 @@ async function generateStoryboardFromScript(params) {
     }
     // 应用导演规则引擎进行确定性修正
     normalized = applyDirectorEngine(normalized);
-    // v7.0.6 导演引擎之后的台词校验：
-    // applyDialogueRules可能给没有说话人的台词加@旁白标注，需要再次校验
-    // 但此时台词都来自剧本原文，只需检查是否有被误修改或添加的
+    // v7.0.5d 最终台词校验：在导演引擎之后再次校验，确保编造台词没有在后处理中被恢复
     try {
         normalized = enforceDialogueFromScript(normalized, scriptContent);
     } catch(e) {
