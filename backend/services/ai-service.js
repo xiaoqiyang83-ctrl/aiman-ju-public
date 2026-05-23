@@ -488,29 +488,6 @@ const STORYBOARD_SYSTEM_PROMPT = `你是一位资深的漫剧分镜师，擅长�
 - 构图必须指明具体法则（三分法/对角线/对称/引导线等）
 - 角色用@引用标记，确保跨镜头一致性
 
-【场景拆分规则】
-- 剧本中每个场景头（如"2-1 日 内 工厂农场 - 温室"或"3-1 日 外 农场 - 菜地"）对应一个独立的scene对象
-- 严禁将多个场景合并为一个scene！即使场景很短也必须独立存在
-- scene_number必须与剧本场景头编号一致
-- 不同场景的角色、地点、时间可能不同，必须分别列出
-
-【台词完整性要求】
-- 剧本原文中的每一句对话都必须出现在某个镜头的dialogue字段中，一句都不能漏
-- 优先级：台词完整性 > 镜头数量。宁可多加镜头，也不能遗漏台词
-- 空镜头（远景交代环境、转场）可以没有dialogue，但对话镜头必须包含完整台词
-- 一句台词只出现在一个镜头中，不要拆分也不要重复
-- **严禁将多句台词堆在一个镜头里**！每句对话必须独占一个镜头，这是硬性规则
-- dialogue字段格式必须为"@角色名：台词内容"，必须标注说话人角色名
-- 如果原文是"张三：你好"，dialogue必须填"@张三：你好"，不能只填"你好"
-
-【严禁模板化输出】
-- 相邻镜头的光影、色彩、构图必须不同！禁止所有镜头用相同的光影/色彩/构图
-- 每个镜头必须根据该镜头的具体剧情和情绪设计独特的视觉方案
-- 对话镜头：说话者和听者的光影角度不同，构图位置不同
-- 动作镜头：快节奏→高对比冷色调，慢节奏→低对比暖色调
-- 情绪镜头：焦虑→倾斜构图+冷蓝调，喜悦→对称构图+暖黄调
-- 如果发现自己在重复使用相同的光影/色彩/构图描述，必须修改
-
 镜头节奏规则：
 - 环境交代：远景→全景→中景（缓慢推进），2-3个镜头
 - 对话场景：全景(交代)→中景(A)→近景(B)→近景(A)→中景(双人)，3-5个镜头
@@ -523,7 +500,16 @@ const STORYBOARD_SYSTEM_PROMPT = `你是一位资深的漫剧分镜师，擅长�
 1. 严格输出JSON，不要任何解释性文字
 2. 每个镜头必须有完整的visual_prompt结构
 3. 禁止重复镜头
-4. 禁止第二人称（你/你们），用具体角色名`;
+4. 禁止第二人称（你/你们），用具体角色名
+
+【台词完整性要求】
+- 剧本原文中的每一句对话都必须出现在某个镜头的dialogue字段中，一句都不能漏
+- 优先级：台词完整性 > 镜头数量。宁可多加镜头，也不能遗漏台词
+- 空镜头（远景交代环境、转场）可以没有dialogue，但对话镜头必须包含完整台词
+- 一句台词只出现在一个镜头中，不要拆分也不要重复
+- **严禁将多句台词堆在一个镜头里**！每句对话必须独占一个镜头，这是硬性规则
+- dialogue字段格式必须为"@角色名：台词内容"，必须标注说话人角色名
+- 如果原文是"张三：你好"，dialogue必须填"@张三：你好"，不能只填"你好"`;
 
 const STORYBOARD_USER_TEMPLATE = `请将以下剧本拆分为结构化JSON。
 
@@ -535,9 +521,6 @@ const STORYBOARD_USER_TEMPLATE = `请将以下剧本拆分为结构化JSON。
 
 【剧本原文】
 {{content}}
-
-【预提取台词列表】（以下台词必须完整分配到对应镜头的dialogue字段，一句不能漏，格式为@角色名：台词）
-{{dialogue_list}}
 
 【输出格式】
 {
@@ -577,8 +560,8 @@ const STORYBOARD_USER_TEMPLATE = `请将以下剧本拆分为结构化JSON。
             "visual_mapping": "视觉映射方案"
           },
           
-          "dialogue": "角色名：台词原文（必须标注说话人，如@队长：你没事吧？对话镜头禁止留空）",
-          "narration": "旁白原文（如有）",
+          "dialogue": "该镜头台词（无则空字符串）",
+          "narration": "旁白（如有）",
           "scene_reference": "@场景名",
           "original_text": "对应原文片段"
         }
@@ -589,16 +572,13 @@ const STORYBOARD_USER_TEMPLATE = `请将以下剧本拆分为结构化JSON。
 
 【强制约束】
 - 每个场景至少3个镜头，对话场景每句台词占一个镜头
-- dialogue字段必须从剧本原文中提取角色台词并标注说话人！格式为"@角色名：台词"，原文有对话时禁止留空
-- 如果原文是"张三：你好"，则dialogue填"@张三：你好"，必须标注说话人
 - 景别必须有变化，不要全是特写或全是远景
-- lighting每个镜头必须不同！根据剧情写：如"逆光剪影4500K" "顶光压迫感5500K" "侧逆光暖橙3200K"
-- color_palette每个镜头必须不同！如紧张用"#2C3E50 #E74C3C" 悲伤用"#34495E #5DADE2" 温暖用"#F39C12 #E74C3C"
-- composition每个镜头必须不同！交替使用：三分法左交叉点/对角线/中心对称/引导线/黄金螺旋
+- visual_prompt的lighting必须写具体色温如"黄昏侧逆光，色温3200K，金色光晕"
+- visual_prompt的color_palette必须包含hex色值如"#E8913A"
+- visual_prompt的composition必须指明构图法则如"三分法构图，人物位于右侧交叉点"
 - action_prompt必须是物理级描述，如"修长的手指缓慢攥紧衣角，指节发白"
 - 角色必须用@引用标记，如@林川、@苏晚
-- 场景用@引用标记，如@废弃车站
-- 禁止所有镜头用相同的lighting/color_palette/composition，违者视为严重错误`;
+- 场景用@引用标记，如@废弃车站`;
 
 // ==================== 摄影预设映射表 ====================
 
@@ -667,52 +647,27 @@ function compileImagePrompt(shot, scene, characters) {
     // 3. 从visual_prompt结构化字段提取（核心修复）
     var vp = shot.visual_prompt;
     if (vp && typeof vp === 'object') {
-        // 场景描述（最重要，放在前面）
-        if (vp.scene_description) {
-            parts.push(vp.scene_description);
-        }
-        // 光影
-        if (vp.lighting) {
-            parts.push(vp.lighting);
-        }
-        // 色彩
-        if (vp.color_palette) {
-            parts.push(vp.color_palette);
-        }
-        // 角色位置/动作
-        if (vp.character_placement) {
-            parts.push(vp.character_placement);
-        }
-        // 面部细节
-        if (vp.facial_detail) {
-            parts.push(vp.facial_detail);
-        }
-        // 构图
-        if (vp.composition) {
-            parts.push(vp.composition);
-        }
+        if (vp.scene_description) parts.push(vp.scene_description);
+        if (vp.lighting) parts.push(vp.lighting);
+        if (vp.color_palette) parts.push(vp.color_palette);
+        if (vp.character_placement) parts.push(vp.character_placement);
+        if (vp.facial_detail) parts.push(vp.facial_detail);
+        if (vp.composition) parts.push(vp.composition);
     } else if (vp && typeof vp === 'string' && vp.trim()) {
-        // 兼容旧格式：直接是字符串
         parts.push(vp);
     }
     
     // 4. 动作提示词
     var ap = shot.action_prompt;
-    if (ap && typeof ap === 'object') {
-        if (ap.physical_action) {
-            parts.push(ap.physical_action);
-        }
+    if (ap && typeof ap === 'object' && ap.physical_action) {
+        parts.push(ap.physical_action);
     }
     
     // 5. 情绪提示词
     var ec = shot.emotion_cue;
     if (ec && typeof ec === 'object') {
-        if (ec.primary_emotion) {
-            parts.push(ec.primary_emotion + ' mood');
-        }
-        if (ec.visual_mapping) {
-            parts.push(ec.visual_mapping);
-        }
+        if (ec.primary_emotion) parts.push(ec.primary_emotion + ' mood');
+        if (ec.visual_mapping) parts.push(ec.visual_mapping);
     }
     
     // 6. 时间/光线
@@ -911,177 +866,6 @@ function findLastCompleteObject(text, requiredFields) {
     return -1;
 }
 
-// ==================== 剧本预解析 - 台词提取 ====================
-
-/**
- * 剧本预解析：从原文中提取台词列表
- * 参考：魔因漫创 episode-parser.ts 的规则解析思路
- * 台词格式：角色名：台词内容 或 角色名:台词内容
- * 跳过：△开头的舞台指示、【字幕】、空行
- */
-function preParseScript(content) {
-    var dialogues = [];
-    if (!content) return dialogues;
-    var lines = content.split('\n');
-    for (var i = 0; i < lines.length; i++) {
-        var line = lines[i].trim();
-        // 跳过空行
-        if (!line) continue;
-        // 跳过舞台指示（△开头）
-        if (line.charAt(0) === '△') continue;
-        // 跳过字幕/转场
-        if (/^【/.test(line)) continue;
-        // 跳过场景头（如 "1-1 日 内 地点" 或 "场景1" 等）
-        if (/^\d+-\d+\s/.test(line)) continue;
-        if (/^场景\d+/.test(line)) continue;
-        // 跳过 "人物：" 行
-        if (/^人物[：:]/.test(line)) continue;
-        // 跳过纯环境描写（太长的行，不像台词）
-        if (line.length > 80) continue;
-        
-        // 匹配台词格式：角色名：台词 或 角色名:台词
-        // 角色名1-8个中文字符，冒号后是台词内容
-        var match = line.match(/^([\u4e00-\u9fa5A-Za-z0-9·]{1,8})[：:]\s*(.+)$/);
-        if (match) {
-            var charName = match[1].trim();
-            var dialogueText = match[2].trim();
-            // 排除明显的非台词行
-            var nonDialoguePatterns = /^(第[一二三四五六七八九十\d]+集|大纲|人物小传|场景|时间|地点|氛围|视觉|标签|备注)/;
-            if (nonDialoguePatterns.test(charName)) continue;
-            if (dialogueText.length === 0) continue;
-            dialogues.push({
-                character: charName,
-                text: dialogueText,
-                lineIndex: i
-            });
-        }
-    }
-    return dialogues;
-}
-
-/**
- * 自动补全台词：检查预提取的台词是否都被分配到镜头，遗漏的自动补上
- */
-function autoFillDialogue(normalized, dialogueList) {
-    if (!dialogueList || dialogueList.length === 0) return normalized;
-    
-    // Step 1: 收集已有dialogue中出现的台词文本
-    var assignedTexts = [];
-    for (var si = 0; si < normalized.scenes.length; si++) {
-        var scene = normalized.scenes[si];
-        for (var shi = 0; shi < scene.shots.length; shi++) {
-            var shot = scene.shots[shi];
-            if (shot.dialogue && shot.dialogue.trim()) {
-                assignedTexts.push(shot.dialogue.trim());
-            }
-            // 如果dialogue为空但original_text包含台词格式，自动提取
-            if (!shot.dialogue || !shot.dialogue.trim()) {
-                var origMatch = (shot.original_text || '').match(/([^：:\n]{1,8})[：:]\s*(.+)/);
-                if (origMatch) {
-                    shot.dialogue = '@' + origMatch[1].trim() + '：' + origMatch[2].trim();
-                    assignedTexts.push(shot.dialogue);
-                }
-            }
-        }
-    }
-    
-    // Step 2: 检查遗漏的台词
-    var missingDialogues = [];
-    for (var di = 0; di < dialogueList.length; di++) {
-        var d = dialogueList[di];
-        var found = false;
-        for (var ai = 0; ai < assignedTexts.length; ai++) {
-            // 检查台词文本是否出现在已分配的dialogue中
-            if (assignedTexts[ai].indexOf(d.text) !== -1) {
-                found = true;
-                break;
-            }
-        }
-        if (!found) {
-            missingDialogues.push(d);
-        }
-    }
-    
-    if (missingDialogues.length === 0) return normalized;
-    
-    console.log('[AI Service] 发现遗漏台词 ' + missingDialogues.length + ' 条，自动补全');
-    
-    // Step 3: 为遗漏的台词匹配场景并追加镜头
-    for (var mi = 0; mi < missingDialogues.length; mi++) {
-        var missing = missingDialogues[mi];
-        
-        // 优先匹配content中包含该台词原文的场景
-        var targetScene = null;
-        for (var sIdx = 0; sIdx < normalized.scenes.length; sIdx++) {
-            var scene = normalized.scenes[sIdx];
-            if (scene.content && scene.content.indexOf(missing.text) !== -1) {
-                targetScene = scene;
-                break;
-            }
-        }
-        // 如果content中没有，按角色名匹配最后一个包含该角色的场景
-        if (!targetScene) {
-            for (var sIdx2 = normalized.scenes.length - 1; sIdx2 >= 0; sIdx2--) {
-                var scene2 = normalized.scenes[sIdx2];
-                if (scene2.characters.indexOf(missing.character) !== -1 || 
-                    (scene2.content && scene2.content.indexOf(missing.character) !== -1)) {
-                    targetScene = scene2;
-                    break;
-                }
-            }
-        }
-        
-        if (targetScene) {
-            // 从已有镜头复用光影和色调描述
-            var refLighting = '';
-            var refPalette = '';
-            for (var ri = 0; ri < targetScene.shots.length; ri++) {
-                var refShot = targetScene.shots[ri];
-                if (refShot.visual_prompt) {
-                    if (refShot.visual_prompt.lighting && !refLighting) refLighting = refShot.visual_prompt.lighting;
-                    if (refShot.visual_prompt.color_palette && !refPalette) refPalette = refShot.visual_prompt.color_palette;
-                }
-                if (refLighting && refPalette) break;
-            }
-            var sceneDesc = (targetScene.title || '') + '，' + missing.character + '说话';
-            // 在该场景末尾追加一个近景镜头
-            var newShot = {
-                shot_number: targetScene.shots.length + 1,
-                shot_type: '近景',
-                camera_angle: '平视',
-                camera_movement: '固定',
-                duration: 3,
-                dialogue: '@' + missing.character + '：' + missing.text,
-                narration: '',
-                scene_reference: '@' + (targetScene.title || ''),
-                original_text: missing.character + '：' + missing.text,
-                visual_prompt: {
-                    lighting: refLighting || '自然光',
-                    color_palette: refPalette || '',
-                    character_placement: '@' + missing.character + ' 画面中央',
-                    facial_detail: '',
-                    scene_description: sceneDesc,
-                    composition: '居中构图'
-                },
-                action_prompt: {
-                    physical_action: '',
-                    micro_movement: ''
-                },
-                emotion_cue: {
-                    primary_emotion: '',
-                    visual_mapping: ''
-                }
-            };
-            targetScene.shots.push(newShot);
-            console.log('[AI Service] 补全台词: @' + missing.character + '：' + missing.text.substring(0, 20));
-        } else {
-            console.log('[AI Service] 无法匹配场景，遗漏台词: @' + missing.character + '：' + missing.text.substring(0, 20));
-        }
-    }
-    
-    return normalized;
-}
-
 // ==================== 数据标准化 (v5.3 增强版) ====================
 
 function normalizeStoryboard(data) {
@@ -1191,7 +975,91 @@ function normalizeStoryboard(data) {
         }
     }
     
+    // 台词兜底：如果AI没给dialogue，从场景原文提取并分配
+    for (var si = 0; si < data.scenes.length; si++) {
+        var scene = data.scenes[si];
+        if (!Array.isArray(scene.shots) || !scene.shots.length) continue;
+        
+        var nonEmptyCount = scene.shots.filter(function(s) { return String(s.dialogue || '').trim(); }).length;
+        // 如果所有镜头都没台词，尝试从场景原文提取
+        if (nonEmptyCount === 0 && scene.content) {
+            var dialogues = extractDialoguesFromSceneContent(scene.content);
+            if (dialogues.length > 0) {
+                var dIdx = 0;
+                for (var i = 0; i < scene.shots.length; i++) {
+                    if (!String(scene.shots[i].dialogue || '').trim() && dIdx < dialogues.length) {
+                        scene.shots[i].dialogue = dialogues[dIdx];
+                        dIdx++;
+                    }
+                    // 同时补original_text
+                    if (!String(scene.shots[i].original_text || '').trim()) {
+                        scene.shots[i].original_text = scene.shots[i].dialogue || scene.content;
+                    }
+                }
+                // 多余台词追加到最后一个镜头
+                while (dIdx < dialogues.length) {
+                    var lastShot = scene.shots[scene.shots.length - 1];
+                    if (lastShot) {
+                        lastShot.dialogue = lastShot.dialogue ? lastShot.dialogue + '；' + dialogues[dIdx] : dialogues[dIdx];
+                    }
+                    dIdx++;
+                }
+            } else {
+                // 从每个镜头的original_text里提取引号台词
+                for (var i = 0; i < scene.shots.length; i++) {
+                    var orig = String(scene.shots[i].original_text || '').trim();
+                    if (!orig) {
+                        scene.shots[i].original_text = scene.content;
+                        orig = scene.content;
+                    }
+                    var quotedMatch = String(orig).match(/"([^"]+)"|「([^」]+)」|"([^"]+)"/);
+                    if (quotedMatch) {
+                        scene.shots[i].dialogue = (quotedMatch[1] || quotedMatch[2] || quotedMatch[3] || '').trim();
+                    }
+                    if (!scene.shots[i].dialogue) {
+                        var colonMatch = String(orig).match(/[\u4e00-\u9fa5]{1,8}[：:]\s*(.+)$/);
+                        if (colonMatch) scene.shots[i].dialogue = String(colonMatch[1] || '').trim();
+                    }
+                }
+            }
+        }
+    }
+    
     return data;
+}
+
+/**
+ * 从场景原文提取台词
+ */
+function extractDialoguesFromSceneContent(content) {
+    var t = String(content || '');
+    var dialogues = [];
+    var lines = t.split('\n').map(function(s) { return s.trim(); }).filter(Boolean);
+    for (var li = 0; li < lines.length; li++) {
+        var line = lines[li];
+        if (/^(人物|场景|地点|时间|道具|备注|场次)[：:]/.test(line)) continue;
+        if (/^(第.{1,3}集|第.{1,3}场)/.test(line)) continue;
+        // 格式1: 角色：台词
+        var m1 = line.match(/^(.{1,16}?)(?:\s*[（(]([^)）]+)[)）])?\s*(VO|OS)?\s*[：:]\s*(.+)$/i);
+        if (m1) {
+            var rhs = String(m1[4] || '').trim();
+            if (rhs && rhs.length < 200) { dialogues.push(rhs); continue; }
+        }
+        // 格式2: 【角色】台词
+        var m2 = line.match(/^【(.{1,16}?)】\s*(.+)$/);
+        if (m2) {
+            var rhs2 = String(m2[2] || '').trim();
+            if (rhs2 && rhs2.length < 200) { dialogues.push(rhs2); continue; }
+        }
+    }
+    if (dialogues.length) return dialogues;
+    // Fallback: 从引号提取
+    var quotes = String(t || '').match(/"([^"]+)"|「([^」]+)」|"([^"]+)"|'([^']+)'/g) || [];
+    for (var qi = 0; qi < quotes.length; qi++) {
+        var inner = quotes[qi].replace(/^[""「']/, '').replace(/[""」']$/, '').trim();
+        if (inner && inner.length >= 2 && inner.length < 200) dialogues.push(inner);
+    }
+    return dialogues;
 }
 
 // ==================== Director Rule Engine（导演规则引擎）====================
@@ -1201,130 +1069,36 @@ function normalizeStoryboard(data) {
  * 解决LLM常见问题：全给中景、爽点不强化、情绪和镜头不匹配等
  */
 
-/**
- * 情绪→镜头映射规则表
- * 愤怒 → 特写/大特写, 推镜头, 高对比红/橙色
- * 绝望 → 远景/全景, 拉镜头, 冷蓝色低对比
- * 震惊 → 近景/特写, 快速推镜, 高对比
- * 恐惧 → 近景, 推镜头, 暗调冷色
- * 悲伤 → 中景/远景, 慢拉, 低对比冷蓝
- * 喜悦 → 中景/近景, 轻推, 暖色高调
- * 压迫 → 特写, 慢推, 暗调
- */
 var EMOTION_SHOT_RULES = {
-    '愤怒': {
-        shot_type: ['特写', '大特写'],
-        camera_movement: '推镜头',
-        light: '高对比红/橙色'
-    },
-    '绝望': {
-        shot_type: ['远景', '全景'],
-        camera_movement: '拉镜头',
-        light: '冷蓝色低对比'
-    },
-    '震惊': {
-        shot_type: ['近景', '特写'],
-        camera_movement: '快速推镜',
-        light: '高对比'
-    },
-    '恐惧': {
-        shot_type: ['近景'],
-        camera_movement: '推镜头',
-        light: '暗调冷色'
-    },
-    '悲伤': {
-        shot_type: ['中景', '远景'],
-        camera_movement: '慢拉',
-        light: '低对比冷蓝'
-    },
-    '喜悦': {
-        shot_type: ['中景', '近景'],
-        camera_movement: '轻推',
-        light: '暖色高调'
-    },
-    '压迫': {
-        shot_type: ['特写'],
-        camera_movement: '慢推',
-        light: '暗调'
-    }
+    '愤怒': { shot_type: ['特写', '大特写'], camera_movement: '推镜头', light: '高对比红/橙色' },
+    '绝望': { shot_type: ['远景', '全景'], camera_movement: '拉镜头', light: '冷蓝色低对比' },
+    '震惊': { shot_type: ['近景', '特写'], camera_movement: '快速推镜', light: '高对比' },
+    '恐惧': { shot_type: ['近景'], camera_movement: '推镜头', light: '暗调冷色' },
+    '悲伤': { shot_type: ['中景', '远景'], camera_movement: '慢拉', light: '低对比冷蓝' },
+    '喜悦': { shot_type: ['中景', '近景'], camera_movement: '轻推', light: '暖色高调' },
+    '压迫': { shot_type: ['特写'], camera_movement: '慢推', light: '暗调' }
 };
 
-/**
- * 爽点检测关键词模式
- * 觉醒（抬头/睁眼/站起来/站起/觉醒/苏醒）→ 大特写, 仰视, 慢推, duration: 4
- * 反杀（一刀/击败/赢了/反杀/斩/杀）→ 特写, 跟镜头, duration: 2
- * 打脸（哼/冷笑/你算什么/不过如此/不值一提）→ 大特写, 仰视, duration: 3
- * 威压（气息/压迫/跪下/颤抖/跪/臣服）→ 特写, 推镜头, duration: 3
- * 装逼（慢慢/淡然/无所谓/轻轻/随意/微笑）→ 近景, 侧视, 环绕, duration: 4
- */
 var POWER_UP_PATTERNS = [
-    {
-        name: '觉醒',
-        keywords: ['抬头', '睁眼', '站起来', '站起', '觉醒', '苏醒', '爆发', '力量觉醒'],
-        overrides: {
-            shot_type: '大特写',
-            camera_angle: '仰视',
-            camera_movement: '慢推',
-            duration: 4
-        }
-    },
-    {
-        name: '反杀',
-        keywords: ['一刀', '击败', '赢了', '反杀', '斩', '杀', '击溃', '打败'],
-        overrides: {
-            shot_type: '特写',
-            camera_movement: '跟镜头',
-            duration: 2
-        }
-    },
-    {
-        name: '打脸',
-        keywords: ['哼', '冷笑', '你算什么', '不过如此', '不值一提', '可笑', '不自量力'],
-        overrides: {
-            shot_type: '大特写',
-            camera_angle: '仰视',
-            duration: 3
-        }
-    },
-    {
-        name: '威压',
-        keywords: ['气息', '压迫', '跪下', '颤抖', '跪', '臣服', '恐惧', '战栗'],
-        overrides: {
-            shot_type: '特写',
-            camera_movement: '推镜头',
-            duration: 3
-        }
-    },
-    {
-        name: '装逼',
-        keywords: ['慢慢', '淡然', '无所谓', '轻轻', '随意', '微笑', '淡淡', '平静'],
-        overrides: {
-            shot_type: '近景',
-            camera_angle: '侧视',
-            camera_movement: '环绕',
-            duration: 4
-        }
-    }
+    { name: '觉醒', keywords: ['抬头', '睁眼', '站起来', '站起', '觉醒', '苏醒', '爆发', '力量觉醒'],
+      overrides: { shot_type: '大特写', camera_angle: '仰视', camera_movement: '慢推', duration: 4 } },
+    { name: '反杀', keywords: ['一刀', '击败', '赢了', '反杀', '斩', '杀', '击溃', '打败'],
+      overrides: { shot_type: '特写', camera_movement: '跟镜头', duration: 2 } },
+    { name: '打脸', keywords: ['哼', '冷笑', '你算什么', '不过如此', '不值一提', '可笑', '不自量力'],
+      overrides: { shot_type: '大特写', camera_angle: '仰视', duration: 3 } },
+    { name: '威压', keywords: ['气息', '压迫', '跪下', '颤抖', '跪', '臣服', '恐惧', '战栗'],
+      overrides: { shot_type: '特写', camera_movement: '推镜头', duration: 3 } },
+    { name: '装逼', keywords: ['慢慢', '淡然', '无所谓', '轻轻', '随意', '微笑', '淡淡', '平静'],
+      overrides: { shot_type: '近景', camera_angle: '侧视', camera_movement: '环绕', duration: 4 } }
 ];
 
-/**
- * 景别等级表（从远到近）
- */
 var SHOT_LEVELS = ['远景', '全景', '中远景', '中景', '中近景', '近景', '特写', '大特写'];
 
-/**
- * 获取景别等级索引
- */
 function getShotLevelIndex(shotType) {
     var idx = SHOT_LEVELS.indexOf(shotType);
-    return idx >= 0 ? idx : 4; // 默认返回中景的索引
+    return idx >= 0 ? idx : 4;
 }
 
-/**
- * 升降景别（指定shot_type）
- * @param {string} currentType - 当前景别
- * @param {number} direction - 1=升级（更近）, -1=降级（更远）
- */
 function adjustShotLevel(currentType, direction) {
     var idx = getShotLevelIndex(currentType);
     var newIdx = idx + direction;
@@ -1333,43 +1107,25 @@ function adjustShotLevel(currentType, direction) {
     return SHOT_LEVELS[newIdx];
 }
 
-/**
- * 深拷贝对象（用于避免修改原始数据）
- */
 function deepClone(obj) {
-    if (obj === null || typeof obj !== 'object') {
-        return obj;
-    }
+    if (obj === null || typeof obj !== 'object') return obj;
     if (Array.isArray(obj)) {
         var arr = [];
-        for (var i = 0; i < obj.length; i++) {
-            arr.push(deepClone(obj[i]));
-        }
+        for (var i = 0; i < obj.length; i++) arr.push(deepClone(obj[i]));
         return arr;
     }
     var copy = {};
     var keys = Object.keys(obj);
-    for (var k = 0; k < keys.length; k++) {
-        copy[keys[k]] = deepClone(obj[keys[k]]);
-    }
+    for (var k = 0; k < keys.length; k++) copy[keys[k]] = deepClone(obj[keys[k]]);
     return copy;
 }
 
-/**
- * 检测爽点关键词
- * @param {Object} shot - 镜头对象
- * @returns {Object|null} - 命中的爽点模式或null
- */
 function detectPowerUp(shot) {
     var text = '';
     if (shot.dialogue) text += shot.dialogue;
     if (shot.original_text) text += shot.original_text;
-    if (shot.action_prompt && shot.action_prompt.physical_action) {
-        text += shot.action_prompt.physical_action;
-    }
-    
+    if (shot.action_prompt && shot.action_prompt.physical_action) text += shot.action_prompt.physical_action;
     text = String(text).toLowerCase();
-    
     for (var i = 0; i < POWER_UP_PATTERNS.length; i++) {
         var pattern = POWER_UP_PATTERNS[i];
         for (var j = 0; j < pattern.keywords.length; j++) {
@@ -1382,32 +1138,20 @@ function detectPowerUp(shot) {
     return null;
 }
 
-/**
- * 应用情绪→镜头映射规则
- * @param {Object} shot - 镜头对象
- */
 function applyEmotionMapping(shot) {
     var emotion = shot.emotion_cue && shot.emotion_cue.primary_emotion;
     if (!emotion) return;
-    
     var rule = EMOTION_SHOT_RULES[emotion];
     if (!rule) return;
-    
-    // 如果当前不是目标景别，进行映射
     if (rule.shot_type.indexOf(shot.shot_type) < 0) {
-        // 随机选择一个目标景别
         var targetShot = rule.shot_type[Math.floor(Math.random() * rule.shot_type.length)];
         console.log('[Director Engine] 情绪映射: ' + emotion + ' → ' + targetShot);
         shot.shot_type = targetShot;
     }
-    
-    // 映射运镜（覆盖"固定"这种无意义的默认值）
     if (rule.camera_movement && (!shot.camera_movement || shot.camera_movement === '固定')) {
         console.log('[Director Engine] 情绪运镜映射: ' + emotion + ' → ' + rule.camera_movement);
         shot.camera_movement = rule.camera_movement;
     }
-    
-    // 映射灯光（覆盖空值或过于笼统的描述）
     if (rule.light && shot.visual_prompt) {
         var currentLight = shot.visual_prompt.lighting || '';
         if (!currentLight || currentLight === '自然光' || currentLight === '室内光') {
@@ -1417,140 +1161,83 @@ function applyEmotionMapping(shot) {
     }
 }
 
-/**
- * 应用爽点强化规则（优先级高于情绪映射）
- * @param {Object} shot - 镜头对象
- */
 function applyPowerUpEnhancement(shot) {
     var powerUp = detectPowerUp(shot);
     if (!powerUp) return;
-    
     var overrides = powerUp.overrides;
     if (overrides.shot_type) {
         console.log('[Director Engine] 爽点强化: ' + powerUp.name + ' → ' + overrides.shot_type);
         shot.shot_type = overrides.shot_type;
     }
-    if (overrides.camera_angle) {
-        shot.camera_angle = overrides.camera_angle;
-    }
-    if (overrides.camera_movement) {
-        shot.camera_movement = overrides.camera_movement;
-    }
-    if (overrides.duration) {
-        shot.duration = overrides.duration;
-    }
+    if (overrides.camera_angle) shot.camera_angle = overrides.camera_angle;
+    if (overrides.camera_movement) shot.camera_movement = overrides.camera_movement;
+    if (overrides.duration) shot.duration = overrides.duration;
 }
 
-/**
- * 检查并修正景别多样性
- * @param {Array} shots - 镜头数组
- */
 function fixShotTypeDiversity(shots) {
     if (!shots || shots.length < 3) return;
-    
     var shotTypes = [];
-    for (var i = 0; i < shots.length; i++) {
-        shotTypes.push(shots[i].shot_type);
-    }
-    
-    // 检查连续3个相同景别
+    for (var i = 0; i < shots.length; i++) shotTypes.push(shots[i].shot_type);
     for (var i = 0; i < shots.length - 2; i++) {
         if (shotTypes[i] === shotTypes[i + 1] && shotTypes[i + 1] === shotTypes[i + 2]) {
             console.log('[Director Engine] 检测到连续3个相同景别: ' + shotTypes[i] + ' (位置: ' + (i+1) + '-' + (i+3) + ')');
-            // 升降第2个镜头
             var currentType = shots[i + 1].shot_type;
             var midIdx = getShotLevelIndex(currentType);
-            var direction = (midIdx <= 3) ? 1 : -1; // 前半部分升，后半部分降
+            var direction = (midIdx <= 3) ? 1 : -1;
             shots[i + 1].shot_type = adjustShotLevel(currentType, direction);
             console.log('[Director Engine] 强制升降景别: ' + currentType + ' → ' + shots[i + 1].shot_type);
             shotTypes[i + 1] = shots[i + 1].shot_type;
         }
     }
-    
-    // 检查整个scene是否有特写/大特写
     var hasExtreme = false;
     for (var i = 0; i < shots.length; i++) {
-        if (shots[i].shot_type === '特写' || shots[i].shot_type === '大特写') {
-            hasExtreme = true;
-            break;
-        }
+        if (shots[i].shot_type === '特写' || shots[i].shot_type === '大特写') { hasExtreme = true; break; }
     }
-    
     if (!hasExtreme && shots.length > 0) {
-        // 找到emotion强度最高的shot
         var maxEmotionIdx = 0;
         var maxEmotionScore = 0;
         for (var i = 0; i < shots.length; i++) {
             var emotion = shots[i].emotion_cue && shots[i].emotion_cue.primary_emotion;
-            var score = emotion ? 1 : 0; // 简化评分
-            if (score > maxEmotionScore) {
-                maxEmotionScore = score;
-                maxEmotionIdx = i;
-            }
+            var score = emotion ? 1 : 0;
+            if (score > maxEmotionScore) { maxEmotionScore = score; maxEmotionIdx = i; }
         }
         console.log('[Director Engine] scene缺少特写，为emotion最强shot添加特写');
         shots[maxEmotionIdx].shot_type = '特写';
     }
-    
-    // 检查整个scene是否有远景/全景
     var hasWide = false;
     for (var i = 0; i < shots.length; i++) {
-        if (shots[i].shot_type === '远景' || shots[i].shot_type === '全景') {
-            hasWide = true;
-            break;
-        }
+        if (shots[i].shot_type === '远景' || shots[i].shot_type === '全景') { hasWide = true; break; }
     }
-    
     if (!hasWide && shots.length > 0) {
         console.log('[Director Engine] scene缺少远景/全景，将第一个shot改为远景');
         shots[0].shot_type = '远景';
     }
 }
 
-/**
- * 检查并修正运镜多样性
- * @param {Array} shots - 镜头数组
- */
 function fixCameraMovementDiversity(shots) {
     if (!shots || shots.length < 3) return;
-    
     var movements = [];
-    for (var i = 0; i < shots.length; i++) {
-        movements.push(shots[i].camera_movement);
-    }
-    
-    // 检查连续3个相同运镜
+    for (var i = 0; i < shots.length; i++) movements.push(shots[i].camera_movement);
     for (var i = 0; i < shots.length - 2; i++) {
         if (movements[i] === movements[i + 1] && movements[i + 1] === movements[i + 2]) {
             console.log('[Director Engine] 检测到连续3个相同运镜: ' + movements[i] + ' (位置: ' + (i+1) + '-' + (i+3) + ')');
-            // 改为其他运镜
             var alternatives = ['推镜头', '移镜头', '摇镜头', '跟镜头'];
             var currentMov = shots[i + 1].camera_movement;
             var newMov = currentMov;
             for (var j = 0; j < alternatives.length; j++) {
-                if (alternatives[j] !== currentMov) {
-                    newMov = alternatives[j];
-                    break;
-                }
+                if (alternatives[j] !== currentMov) { newMov = alternatives[j]; break; }
             }
             shots[i + 1].camera_movement = newMov;
             console.log('[Director Engine] 强制改变运镜: ' + currentMov + ' → ' + newMov);
             movements[i + 1] = newMov;
         }
     }
-    
-    // 检查整个scene是否全是固定镜头
     var allFixed = true;
     for (var i = 0; i < shots.length; i++) {
-        if (shots[i].camera_movement !== '固定') {
-            allFixed = false;
-            break;
-        }
+        if (shots[i].camera_movement !== '固定') { allFixed = false; break; }
     }
-    
     if (allFixed && shots.length >= 2) {
         console.log('[Director Engine] scene全是固定镜头，修改部分为推镜头/移镜头');
-        // 至少修改2个为动态运镜
         var modified = 0;
         for (var i = 1; i < shots.length && modified < 2; i += 2) {
             if (shots[i].camera_movement === '固定') {
@@ -1561,43 +1248,24 @@ function fixCameraMovementDiversity(shots) {
     }
 }
 
-/**
- * 检查并修正duration合理性
- * @param {Object} shot - 镜头对象
- * @param {string} shotType - 镜头类型
- */
 function fixDurationReasonableness(shot, shotType) {
     var duration = shot.duration;
     var emotion = shot.emotion_cue && shot.emotion_cue.primary_emotion;
-    
-    // 对话镜头：2-4秒
     var isDialogue = shot.dialogue && shot.dialogue.trim().length > 0;
-    // 动作镜头：1-3秒
     var isAction = shot.action_prompt && (
         shot.action_prompt.physical_action.indexOf('动') >= 0 ||
         shot.action_prompt.physical_action.indexOf('走') >= 0 ||
         shot.action_prompt.physical_action.indexOf('跑') >= 0 ||
         shot.action_prompt.physical_action.indexOf('打') >= 0
     );
-    // 情绪特写：3-5秒
     var isEmotionCloseUp = (shotType === '特写' || shotType === '大特写' || shotType === '近景') && emotion;
-    // 远景交代：3-5秒
     var isWideEstablishing = shotType === '远景' || shotType === '全景';
-    
     var minDur, maxDur;
-    if (isDialogue) {
-        minDur = 2; maxDur = 4;
-    } else if (isAction) {
-        minDur = 1; maxDur = 3;
-    } else if (isEmotionCloseUp) {
-        minDur = 3; maxDur = 5;
-    } else if (isWideEstablishing) {
-        minDur = 3; maxDur = 5;
-    } else {
-        // 默认值
-        minDur = 2; maxDur = 4;
-    }
-    
+    if (isDialogue) { minDur = 2; maxDur = 4; }
+    else if (isAction) { minDur = 1; maxDur = 3; }
+    else if (isEmotionCloseUp) { minDur = 3; maxDur = 5; }
+    else if (isWideEstablishing) { minDur = 3; maxDur = 5; }
+    else { minDur = 2; maxDur = 4; }
     if (duration < minDur) {
         console.log('[Director Engine] duration过短: ' + duration + ' → ' + minDur);
         shot.duration = minDur;
@@ -1609,60 +1277,35 @@ function fixDurationReasonableness(shot, shotType) {
 
 /**
  * 主入口：应用导演规则引擎
- * @param {Object} data - 归一化后的分镜数据
- * @returns {Object} - 修正后的分镜数据
  */
 function applyDirectorEngine(data) {
     console.log('[Director Engine] 开始执行导演规则引擎...');
-    
-    // 深拷贝，避免修改原始数据
     var processed = deepClone(data);
-    
     if (!processed || !Array.isArray(processed.scenes)) {
         console.log('[Director Engine] 无有效scenes数据，跳过');
         return processed;
     }
-    
     for (var si = 0; si < processed.scenes.length; si++) {
         var scene = processed.scenes[si];
         console.log('[Director Engine] 处理场景 ' + (si + 1) + ': ' + scene.title);
-        
         if (!Array.isArray(scene.shots) || scene.shots.length === 0) {
             console.log('[Director Engine] 场景 ' + (si + 1) + ' 无shots，跳过');
             continue;
         }
-        
-        // 第一步：逐个shot应用规则
         for (var i = 0; i < scene.shots.length; i++) {
             var shot = scene.shots[i];
-            
-            // 1.1 先检测爽点（优先级最高）
             applyPowerUpEnhancement(shot);
-            
-            // 1.2 如果没有命中爽点，应用情绪映射
-            if (!detectPowerUp(shot)) {
-                applyEmotionMapping(shot);
-            }
-            
-            // 1.3 修正duration合理性
+            if (!detectPowerUp(shot)) applyEmotionMapping(shot);
             fixDurationReasonableness(shot, shot.shot_type);
         }
-        
-        // 第二步：场景级别的多样性修正
         fixShotTypeDiversity(scene.shots);
         fixCameraMovementDiversity(scene.shots);
-        
-        // 第三步：爽点优先级确保（场景级别修正后重新应用爽点强化）
         for (var i = 0; i < scene.shots.length; i++) {
             var shot = scene.shots[i];
-            if (detectPowerUp(shot)) {
-                applyPowerUpEnhancement(shot);
-            }
+            if (detectPowerUp(shot)) applyPowerUpEnhancement(shot);
         }
-        
         console.log('[Director Engine] 场景 ' + (si + 1) + ' 处理完成，共 ' + scene.shots.length + ' 个shots');
     }
-    
     console.log('[Director Engine] 导演规则引擎执行完毕');
     return processed;
 }
@@ -1719,22 +1362,11 @@ async function generateStoryboardFromScript(params) {
         throw new Error('未配置可用的大模型接口。请在 backend/.env 按 backend/.env.example 添加：AI_PROVIDER=openai-compatible、AI_API_KEY、AI_BASE_URL、AI_MODEL（推荐），然后重试上传。');
     }
     
-    // 预提取台词列表
-    var dialogueList = preParseScript(scriptContent);
-    var dialogueListStr = '';
-    if (dialogueList.length > 0) {
-        dialogueListStr = dialogueList.map(function(d, i) {
-            return (i+1) + '. @' + d.character + '：' + d.text;
-        }).join('\n');
-    }
-    console.log('[AI Service] 预提取台词数量:', dialogueList.length);
-    
     var systemPrompt = STORYBOARD_SYSTEM_PROMPT;
     var userPrompt = interpolateTemplate(STORYBOARD_USER_TEMPLATE, {
         title: scriptTitle || '未命名剧本',
         content: scriptContent,
-        character_bible: characterBible || '（暂无角色信息）',
-        dialogue_list: dialogueListStr
+        character_bible: characterBible || '（暂无角色信息）'
     });
     
     var result;
@@ -1757,16 +1389,8 @@ async function generateStoryboardFromScript(params) {
     var jsonText = extractFirstJsonObject(result.content);
     var parsed = parseJsonWithFallback(jsonText);
     var normalized = normalizeStoryboard(parsed);
-    // 自动补全遗漏的台词
-    normalized = autoFillDialogue(normalized, dialogueList);
     // 应用导演规则引擎进行确定性修正
     normalized = applyDirectorEngine(normalized);
-    // 调试日志：检查每个镜头的dialogue输出
-    normalized.scenes.forEach(function(s, si) {
-        s.shots.forEach(function(sh, shi) {
-            console.log('[AI Service] 场景' + (si+1) + ' 镜头' + (shi+1) + ' dialogue=' + JSON.stringify(sh.dialogue) + ' narration=' + JSON.stringify(sh.narration));
-        });
-    });
     var compiled = compilePromptsForStoryboard(normalized);
     
     if (!compiled.scenes.length) {
