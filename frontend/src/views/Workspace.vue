@@ -730,7 +730,7 @@
             </div>
 
             <!-- 视频裁剪弹窗 -->
-            <el-dialog v-model="showTrimDialog" title="视频裁剪" width="680px" :close-on-click-modal="false">
+            <el-dialog v-model="showTrimDialog" title="视频裁剪" width="600px" :close-on-click-modal="false" draggable align-center custom-class="trim-dialog">
               <div v-if="trimVideoUrl" class="trim-dialog-content">
                 <div class="trim-video-area">
                   <video ref="trimVideoRef" :src="trimVideoUrl" class="trim-video-player" @loadedmetadata="onTrimVideoLoaded" @timeupdate="onTrimTimeUpdate"></video>
@@ -1337,7 +1337,7 @@
     </el-dialog>
 
     <!-- 分镜详情弹窗 -->
-    <el-dialog v-model="showShotDetailDialog" title="分镜详情" width="700px">
+    <el-dialog v-model="showShotDetailDialog" title="分镜详情" width="700px" draggable align-center>
       <el-form v-if="currentShot" :model="currentShot" label-width="100px" label-position="top">
         <div class="form-row">
           <el-form-item label="镜头编号" style="width: 120px">
@@ -1468,7 +1468,7 @@
     </el-dialog>
 
     <!-- 场景详情：查看 / 编辑正文 -->
-    <el-dialog v-model="showSceneDetailDialog" title="场景详情" width="680px">
+    <el-dialog v-model="showSceneDetailDialog" title="场景详情" width="680px" draggable align-center>
       <el-form v-if="currentScene" :model="currentScene" label-width="96px" label-position="top">
         <el-form-item label="场景编号">
           <el-input v-model="currentScene.scene_number" disabled />
@@ -1635,7 +1635,7 @@
     </el-dialog>
 
     <!-- 角色详情弹窗（选中角色时显示） -->
-    <el-dialog v-model="showCharacterDetail" title="角色详情" width="680px" :close-on-click-modal="true">
+    <el-dialog v-model="showCharacterDetail" title="角色详情" width="680px" draggable align-center :close-on-click-modal="true">
       <div v-if="selectedCharacter" class="character-detail-dialog">
         <div class="character-avatar-large">
           <img :src="getAssetUrl(selectedCharacter.front_image_url || selectedCharacter.image_url || selectedCharacter.reference_image)" :alt="selectedCharacter.name" />
@@ -7185,7 +7185,7 @@ const handleMoveShot = async (scene, shot, direction) => {
 
 .trim-video-player {
   max-width: 100%;
-  max-height: 320px;
+  max-height: 260px;
 }
 
 .trim-controls {
@@ -7219,4 +7219,11 @@ const handleMoveShot = async (scene, shot, direction) => {
   color: #606266;
   display: flex;
   align-items: center;
+}
+
+.trim-dialog .el-dialog__body {
+  padding: 16px 20px;
+}
+.trim-dialog .el-dialog__header {
+  cursor: move;
 }
