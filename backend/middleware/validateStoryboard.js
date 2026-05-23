@@ -239,7 +239,7 @@ function validateVisualPrompt(shot, shotNum) {
 }
 
 /**
- * 校验dialogue格式，缺少@标注的自动补充
+ * 校验dialogue格式，缺少@标注的自动补充为@旁白（v6.2）
  */
 function validateDialogue(shot, shotNum) {
     var warnings = [];
@@ -252,19 +252,17 @@ function validateDialogue(shot, shotNum) {
     // 检查是否有标注格式 @角色名：
     var atPattern = /^@[\u4e00-\u9fa5a-zA-Z0-9]+[：:]/;
     
-    // 检查是否有中文冒号分隔（但没有@标注）
-    var colonPattern = /^[^\@]+[：:]/;
-    
-    if (colonPattern.test(dialogue) && !atPattern.test(dialogue)) {
-        warnings.push('台词缺少@角色标注，已补充[未标注说话人]');
-        shot.dialogue = '[未标注说话人]：' + dialogue;
+    // v6.2：所有不以@开头的非空台词都补充@旁白
+    if (!atPattern.test(dialogue)) {
+        warnings.push('台词缺少@角色标注，已补充@旁白');
+        shot.dialogue = '@旁白：' + dialogue;
     }
     
     return warnings;
 }
 
 /**
- * 校验台词数量，单个分镜超过3条发出警告
+ * 校验台词数量，单个分镜超过2条发出警告（v6.2改为2条上限）
  */
 function validateDialogueCount(shot, shotNum) {
     var warnings = [];
@@ -283,8 +281,8 @@ function validateDialogueCount(shot, shotNum) {
         count = dialogue.split('；').length;
     }
     
-    if (count > 3) {
-        warnings.push('分镜台词有' + count + '条，超过3条限制，建议拆分到多个分镜');
+    if (count > 2) {
+        warnings.push('分镜台词有' + count + '条，超过2条限制，建议拆分到多个分镜');
     }
     
     return warnings;

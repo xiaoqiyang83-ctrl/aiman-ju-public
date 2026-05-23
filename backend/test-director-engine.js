@@ -632,6 +632,170 @@ test('compileImagePrompt-空visual_prompt不应崩溃', function() {
     if (!result || result.indexOf('[object') >= 0) throw new Error('空visual_prompt导致异常: ' + result);
 });
 
+// ==================== v6.2 applyDialogueRules 测试 ====================
+
+var applyDialogueRules = aiService.applyDialogueRules;
+
+// 台词补全说话人测试
+test('applyDialogueRules-台词没有@标注应自动补@角色名', function() {
+    var mockData = createMockData([
+        createMockScene({ characters: '队长,张扬' }, [
+            { 
+                dialogue: '啊！队长',
+                visual_prompt: { character_placement: '@队长 画面中央', scene_description: '队长震惊地看着张扬' },
+                scene_reference: ''
+            },
+            { 
+                dialogue: '@张扬：哼，不过如此',
+                visual_prompt: { character_placement: '@张扬 画面右侧', scene_description: '张扬冷笑' },
+                scene_reference: ''
+            }
+        ])
+    ]);
+    
+    var result = applyDialogueRules(mockData);
+    var firstDialogue = result.scenes[0].shots[0].dialogue;
+    
+    // 应该补全说话人标注
+    if (firstDialogue.indexOf('@') !== 0) {
+        throw new Error('台词未补全说话人标注: ' + firstDialogue);
+    }
+});
+
+// 台词补全旁白测试
+test('applyDialogueRules-无法推断说话人应标注@旁白', function() {
+    var mockData = createMockData([
+        createMockScene({ characters: '' }, [
+            { 
+                dialogue: '这是一段旁白描述',
+                visual_prompt: { character_placement: '', scene_description: '空旷的场景' },
+                scene_reference: ''
+            }
+        ])
+    ]);
+    
+    var result = applyDialogueRules(mockData);
+    var dialogue = result.scenes[0].shots[0].dialogue;
+    
+    // 应该补全为旁白
+    if (dialogue.indexOf('@旁白') !== 0) {
+        throw new Error('台词应标注为旁白: ' + dialogue);
+    }
+});
+
+// 合并断裂对话测试
+test('applyDialogueRules-相邻两个只有1条台词的分镜应合并', function() {
+    var mockData = createMockData([
+        createMockScene({ characters: '队长,张扬' }, [
+            { 
+                dialogue: '啊！',
+                visual_prompt: { character_placement: '@队长 画面中央', scene_description: '队长震惊地看着张扬' },
+                scene_reference: ''
+            },
+            { 
+                dialogue: '阿空!',
+                visual_prompt: { character_placement: '@张扬 画面右侧', scene_description: '队长震惊地看着张扬' },  // 使用完全相同的场景描述
+                scene_reference: ''
+            }
+        ])
+    ]);
+    
+    var result = applyDialogueRules(mockData);
+    var shotCount = result.scenes[0].shots.length;
+    
+    // 两个相邻分镜应该合并为一个（使用完全相同的场景描述）
+    if (shotCount !== 1) {
+        throw new Error('相邻对话分镜应合并，但shot数量为' + shotCount);
+    }
+    
+    var combinedDialogue = result.scenes[0].shots[0].dialogue;
+    // 合并后应该有两条台词
+    var lines = combinedDialogue.split(/\n/).filter(function(d) { return d.trim(); });
+    if (lines.length !== 2) {
+        throw new Error('合并后应有2条台词，但有' + lines.length + '条: ' + combinedDialogue);
+    }
+});
+
+// 不合并非对话分镜测试
+test('applyDialogueRules-一个有台词一个没台词的相邻分镜不应合并', function() {
+    var mockData = createMockData([
+        createMockScene({ characters: '队长' }, [
+            { 
+                dialogue: '@队长：啊！',
+                visual_prompt: { character_placement: '@队长 画面中央', scene_description: '队长震惊地看着张扬' },
+                scene_reference: ''
+            },
+            { 
+                dialogue: '',
+                visual_prompt: { character_placement: '', scene_description: '环境全景' },
+                scene_reference: ''
+            }
+        ])
+    ]);
+    
+    var result = applyDialogueRules(mockData);
+    var shotCount = result.scenes[0].shots.length;
+    
+    // 不应该合并
+    if (shotCount !== 2) {
+        throw new Error('有台词和无台词的分镜不应合并，但shot数量为' + shotCount);
+    }
+});
+
+// 拆分堆叠台词测试
+test('applyDialogueRules-超过2条台词的分镜应拆分', function() {
+    var mockData = createMockData([
+        createMockScene({ characters: '队长,张扬,阿空' }, [
+            { 
+                dialogue: '@队长：你到底是什么人？\n@张扬：他竟然能驱使S级丧尸！\n@阿空：哼',
+                visual_prompt: { character_placement: '@队长 画面中央', scene_description: '队长震惊地看着张扬' },
+                scene_reference: ''
+            }
+        ])
+    ]);
+    
+    var result = applyDialogueRules(mockData);
+    var shotCount = result.scenes[0].shots.length;
+    
+    // 3条台词应该拆分为2个分镜
+    if (shotCount < 2) {
+        throw new Error('超过2条台词应拆分，但shot数量为' + shotCount);
+    }
+    
+    // 检查每个分镜的台词条数不超过2条
+    for (var i = 0; i < result.scenes[0].shots.length; i++) {
+        var dialogue = result.scenes[0].shots[i].dialogue || '';
+        var lines = dialogue.split(/\n/).filter(function(d) { return d.trim(); });
+        var validLines = lines.filter(function(d) {
+            return d.indexOf('@') === 0 || /^[^\@]+[：:]/.test(d);
+        });
+        if (validLines.length > 2) {
+            throw new Error('拆分后每个分镜台词不应超过2条，但分镜' + (i+1) + '有' + validLines.length + '条');
+        }
+    }
+});
+
+// 不拆分合规台词测试
+test('applyDialogueRules-2条及以下台词的分镜不应拆分', function() {
+    var mockData = createMockData([
+        createMockScene({ characters: '队长,张扬' }, [
+            { 
+                dialogue: '@队长：啊！\n@张扬：阿空!',
+                visual_prompt: { character_placement: '@队长 画面中央', scene_description: '队长震惊地看着张扬' },
+                scene_reference: ''
+            }
+        ])
+    ]);
+    
+    var result = applyDialogueRules(mockData);
+    var shotCount = result.scenes[0].shots.length;
+    
+    // 2条台词不应拆分
+    if (shotCount !== 1) {
+        throw new Error('2条台词不应拆分，但shot数量为' + shotCount);
+    }
+});
+
 console.log('');
 console.log('========================================');
 console.log('测试结果: ' + (passed + failed > 0 ? passed + '/' + (passed + failed) : '0') + ' PASSED');

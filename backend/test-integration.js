@@ -195,7 +195,7 @@ test('compileImagePrompt输出校验-不能包含[object Object]', function() {
     }
 });
 
-// 6. 台词格式校验：非空台词必须以@角色名开头
+// 6. 台词格式校验：非空台词必须以@角色名开头（v6.2改为补充@旁白）
 test('台词格式校验-非空台词必须以@角色名开头', function() {
     var dialogues = [
         '@队长：完了，这批番茄全完了',  // 有效
@@ -227,36 +227,36 @@ test('台词格式校验-非空台词必须以@角色名开头', function() {
     
     var result = validateStoryboard(mockData);
     
-    // 检查修复后的台词
+    // 检查修复后的台词 - v6.2改为补充@旁白
     var fixedDialogue = result.scenes[0].shots[0].dialogue;
-    if (fixedDialogue.indexOf('[未标注说话人]') < 0 && fixedDialogue === '没有标注的台词') {
-        console.log('[WARN] 台词未被自动补充[未标注说话人]标注: ' + fixedDialogue);
+    if (fixedDialogue.indexOf('@旁白') !== 0) {
+        throw new Error('台词应被补充@旁白标注: ' + fixedDialogue);
     }
 });
 
-// 7. 台词堆叠校验：单个分镜台词不能超过3条
-test('台词堆叠校验-单个分镜台词不能超过3条', function() {
+// 7. 台词堆叠校验：单个分镜台词不能超过2条（v6.2改为2条上限）
+test('台词堆叠校验-单个分镜台词不能超过2条', function() {
     var dialogues = [
-        '@角色1：台词1；@角色2：台词2；@角色3：台词3',  // 3条，有效
-        '@角色1：台词1；@角色2：台词2；@角色3：台词3；@角色4：台词4'  // 4条，无效
+        '@角色1：台词1；@角色2：台词2',  // 2条，有效
+        '@角色1：台词1；@角色2：台词2；@角色3：台词3'  // 3条，无效
     ];
     
-    // 检查是否有超过3条台词的情况
+    // 检查是否有超过2条台词的情况
     var countDialogues = function(d) {
         var matches = d.match(/@[\u4e00-\u9fa5a-zA-Z0-9]+[：:]/g);
         return matches ? matches.length : 0;
     };
     
-    var count4 = countDialogues(dialogues[1]);
-    if (count4 <= 3) {
+    var count3 = countDialogues(dialogues[1]);
+    if (count3 <= 2) {
         throw new Error('台词计数逻辑有误');
     }
     
     // 验证validateStoryboard能检测并警告
     var mockData = createMockData([
         createMockScene({}, [
-            { dialogue: dialogues[0] },  // 3条，应该通过
-            { dialogue: dialogues[1] }   // 4条，应该警告
+            { dialogue: dialogues[0] },  // 2条，应该通过
+            { dialogue: dialogues[1] }   // 3条，应该警告
         ])
     ]);
     
@@ -264,14 +264,14 @@ test('台词堆叠校验-单个分镜台词不能超过3条', function() {
     var warningIssued = false;
     for (var i = 0; i < mockData.scenes[0].shots.length; i++) {
         var count = countDialogues(mockData.scenes[0].shots[i].dialogue);
-        if (count > 3) {
+        if (count > 2) {
             warningIssued = true;
-            console.log('[WARN] 检测到分镜' + (i+1) + '有' + count + '条台词，超过3条限制');
+            console.log('[WARN] 检测到分镜' + (i+1) + '有' + count + '条台词，超过2条限制');
         }
     }
     
     if (!warningIssued) {
-        throw new Error('应检测到超过3条的台词并发出警告');
+        throw new Error('应检测到超过2条的台词并发出警告');
     }
 });
 
