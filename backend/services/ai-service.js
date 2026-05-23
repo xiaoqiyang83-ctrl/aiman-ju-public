@@ -2667,16 +2667,41 @@ function enforceDialogueFromScript(data, scriptContent) {
             var ud = unmatched[ui];
             var correctText = '@' + ud.speaker + '：' + ud.text;
             
-            // 优先找到台词内容与场景标题/地点匹配的场景
+            // 优先找到台词在剧本中所属的场景（按行号位置判断）
             var inserted = false;
             var bestSceneIdx = -1;
-            var bestSceneScore = 0;
+            var bestSceneScore = -1;
+            
+            // 根据台词在剧本中的行号，找它所属的场景
+            var dialogueLineIdx = ud.lineIdx || -1;
             
             for (var si = 0; si < data.scenes.length; si++) {
                 var scene = data.scenes[si];
                 if (!Array.isArray(scene.shots)) continue;
                 
-                // 检查该场景是否有这个角色
+                var sceneMatchScore = 0;
+                
+                // 策略1：台词行号与场景标题行号的相对位置（最可靠）
+                if (dialogueLineIdx >= 0) {
+                    var sceneHeadingLine = findSceneHeadingLine(scriptContent, scene.title || scene.location || '');
+                    if (sceneHeadingLine >= 0) {
+                        // 台词在场景标题之后，给基础分
+                        if (dialogueLineIdx >= sceneHeadingLine) {
+                            sceneMatchScore += 100 - (dialogueLineIdx - sceneHeadingLine); // 越近分越高
+                        }
+                    }
+                }
+                
+                // 策略2：场景标题关键词匹配
+                var sceneTitle = String(scene.title || scene.location || '');
+                var titleParts = sceneTitle.split(/[-—\s··:：]/);
+                for (var tp = 0; tp < titleParts.length; tp++) {
+                    if (titleParts[tp].trim().length >= 2 && ud.text.indexOf(titleParts[tp].trim()) >= 0) {
+                        sceneMatchScore += 10;
+                    }
+                }
+                
+                // 策略3：角色匹配
                 var hasChar = false;
                 for (var ci = 0; ci < (scene.characters || []).length; ci++) {
                     if (scene.characters[ci] === ud.speaker) { hasChar = true; break; }
@@ -2687,24 +2712,9 @@ function enforceDialogueFromScript(data, scriptContent) {
                         if (shotText.indexOf(ud.speaker) >= 0) { hasChar = true; break; }
                     }
                 }
-                if (!hasChar) continue;
+                if (hasChar) sceneMatchScore += 5;
                 
-                // 计算台词内容与场景的匹配度
-                var sceneMatchScore = 0;
-                var sceneTitle = String(scene.title || scene.location || '');
-                // 台词中包含场景标题关键词
-                var titleParts = sceneTitle.split(/[-—\s··:：]/);
-                for (var tp = 0; tp < titleParts.length; tp++) {
-                    if (titleParts[tp].trim().length >= 2 && ud.text.indexOf(titleParts[tp].trim()) >= 0) {
-                        sceneMatchScore += 10;
-                    }
-                }
-                // 场景已有台词内容与未分配台词有共同关键词
-                for (var sh = 0; sh < scene.shots.length; sh++) {
-                    var existingD = String(scene.shots[sh].dialogue || '');
-                    if (existingD.indexOf(ud.speaker) >= 0) sceneMatchScore += 3;
-                }
-                // 场景中有空镜头可以放入
+                // 策略4：有空镜头可以放入
                 for (var sh = 0; sh < scene.shots.length; sh++) {
                     if (!String(scene.shots[sh].dialogue || '').trim()) { sceneMatchScore += 1; break; }
                 }
@@ -2715,8 +2725,8 @@ function enforceDialogueFromScript(data, scriptContent) {
                 }
             }
             
-            // 如果没有内容匹配，退回到第一个包含该角色的场景
-            if (bestSceneIdx < 0) {
+            // 退路：没有匹配到任何场景
+            if (bestSceneIdx < 0 || bestSceneScore < 0) {
                 for (var si = 0; si < data.scenes.length; si++) {
                     var scene = data.scenes[si];
                     var hasChar = false;
@@ -2769,13 +2779,12 @@ function extractAllDialoguesFromScript(scriptContent) {
         if (/^(场景一|场景二|场景三|场景四|场景五|场景六|场景七|场景八|场景九|场景十)/.test(line)) continue;
         
         // 格式1: 角色名：台词（最常见格式）
-        // 匹配：张扬：和你说了多少遍 / @张扬：你好 / 张扬（得意）：你好
         var m1 = line.match(/^[@\uff20]?([\u4e00-\u9fa5]{1,6})\s*[（(]([^)）]*)[)）]?\s*[：:]\s*(.+)$/);
         if (m1) {
             var speaker = m1[1].trim();
             var text = m1[3].trim();
             if (text.length > 0 && text.length < 200) {
-                dialogues.push({ speaker: speaker, text: text });
+                dialogues.push({ speaker: speaker, text: text, lineIdx: i });
                 continue;
             }
         }
@@ -2785,10 +2794,9 @@ function extractAllDialoguesFromScript(scriptContent) {
         if (m2) {
             var speaker2 = m2[1].trim();
             var text2 = m2[2].trim();
-            // 排除太长的（可能是场景描述）、太短的、常见的非台词前缀
             if (text2.length > 0 && text2.length < 200 && 
                 !/^(场景|地点|时间|道具|备注|场次|人物|角色)/.test(speaker2)) {
-                dialogues.push({ speaker: speaker2, text: text2 });
+                dialogues.push({ speaker: speaker2, text: text2, lineIdx: i });
                 continue;
             }
         }
@@ -2847,6 +2855,20 @@ function calcTextOverlap(text1, text2) {
     
     // 重合度 = 公共子串长度 / 短文本长度
     return maxLen / shorter.length;
+}
+
+/**
+ * 在剧本原文中找到场景标题行的行号
+ */
+function findSceneHeadingLine(scriptContent, sceneTitle) {
+    if (!scriptContent || !sceneTitle) return -1;
+    var lines = String(scriptContent).split('\n');
+    var title = String(sceneTitle).trim();
+    for (var i = 0; i < lines.length; i++) {
+        var line = String(lines[i] || '').trim();
+        if (line.indexOf(title) >= 0) return i;
+    }
+    return -1;
 }
 
 function extractSceneHeadingsFromScript(scriptContent) {
@@ -3114,12 +3136,59 @@ async function generateStoryboardFromScript(params) {
     var jsonText = extractFirstJsonObject(result.content);
     var parsed = parseJsonWithFallback(jsonText);
     var normalized = normalizeStoryboard(parsed);
+    
+    // v7.0.5d 关键修复：清空normalizeStoryboard从scene.content兜底提取的台词
+    // normalizeStoryboard的台词兜底逻辑从AI写的scene.content提取台词，不可信（可能编造）
+    // 清空后由enforceDialogueFromScript统一从剧本原文重新分配
+    var scriptDialogues = extractAllDialoguesFromScript(scriptContent);
+    if (scriptDialogues.length > 0) {
+        // 有剧本台词才清空，否则保留兜底结果（聊胜于无）
+        for (var si = 0; si < normalized.scenes.length; si++) {
+            var scene = normalized.scenes[si];
+            if (!Array.isArray(scene.shots)) continue;
+            for (var i = 0; i < scene.shots.length; i++) {
+                var d = String(scene.shots[i].dialogue || '').trim();
+                if (d) {
+                    // 检查这条台词是否在剧本原文中存在
+                    var found = false;
+                    var dPureText = stripDialogueMarkup(d);
+                    for (var di = 0; di < scriptDialogues.length; di++) {
+                        var sPureText = stripDialogueMarkup(scriptDialogues[di].text);
+                        if (sPureText === dPureText || dPureText.indexOf(sPureText) >= 0 || sPureText.indexOf(dPureText) >= 0) {
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found) {
+                        // 台词不在剧本中，清空，让enforceDialogueFromScript重新分配
+                        console.log('[Pre-Enforce] 清空不可信台词: "' + d.substring(0, 30) + '..."');
+                        scene.shots[i].dialogue = '';
+                    }
+                }
+            }
+        }
+    }
+    
     // v7.0.3 强制场景拆分：如果AI合并了多个场景，根据剧本原文强制拆分
-    normalized = enforceSceneSplit(normalized, scriptContent);
+    try {
+        normalized = enforceSceneSplit(normalized, scriptContent);
+    } catch(e) {
+        console.log('[Scene Split] 执行出错: ' + (e && e.message));
+    }
     // v7.0.5 强制台词校验：用剧本原文的真实台词替换AI编造的台词
-    normalized = enforceDialogueFromScript(normalized, scriptContent);
+    try {
+        normalized = enforceDialogueFromScript(normalized, scriptContent);
+    } catch(e) {
+        console.log('[Dialogue Enforce] 执行出错: ' + (e && e.message));
+    }
     // 应用导演规则引擎进行确定性修正
     normalized = applyDirectorEngine(normalized);
+    // v7.0.5d 最终台词校验：在导演引擎之后再次校验，确保编造台词没有在后处理中被恢复
+    try {
+        normalized = enforceDialogueFromScript(normalized, scriptContent);
+    } catch(e) {
+        console.log('[Dialogue Enforce Final] 执行出错: ' + (e && e.message));
+    }
     var compiled = compilePromptsForStoryboard(normalized);
     
     if (!compiled.scenes.length) {
