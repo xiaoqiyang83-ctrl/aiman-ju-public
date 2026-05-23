@@ -2332,7 +2332,23 @@ function enforceSceneSplit(data, scriptContent) {
         var sceneSpec = scriptScenes[sci];
         var shots = sceneShotBuckets[sci];
         
-        if (shots.length === 0) continue;
+        // v7.0.6 即使该场景没有匹配到shot也创建场景（放入一个空shot）
+        if (shots.length === 0) {
+            var emptyShot = {
+                shot_number: 1,
+                shot_type: '全景',
+                camera_movement: '固定',
+                camera_angle: '平视',
+                duration: 3,
+                dialogue: '',
+                narration: '',
+                original_text: '',
+                visual_prompt: { lighting: '自然光', color_palette: '', character_placement: '', facial_detail: '', scene_description: (sceneSpec.title || '场景'), composition: '居中' },
+                action_prompt: { physical_action: '', micro_movement: '' },
+                emotion_cue: { primary_emotion: '', visual_mapping: '' }
+            };
+            shots.push(emptyShot);
+        }
         
         // 重新编号shots
         for (var j = 0; j < shots.length; j++) {
