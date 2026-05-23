@@ -4,6 +4,9 @@
  * 包含错误处理、重试机制、Token计算
  */
 
+// v6.1 引入分镜校验中间件
+var validateStoryboard = require('../middleware/validateStoryboard');
+
 async function fetchJson(url, { method = 'POST', headers = {}, body, timeout = 300000 } = {}) {
     const controller = new AbortController();
     const t = setTimeout(() => controller.abort(), timeout);
@@ -1396,6 +1399,9 @@ async function generateStoryboardFromScript(params) {
     if (!compiled.scenes.length) {
         throw new Error('AI返回JSON缺少有效场景');
     }
+    
+    // v6.1 运行时校验：在返回结果前调用校验中间件
+    compiled = validateStoryboard(compiled);
     
     return {
         success: true,
