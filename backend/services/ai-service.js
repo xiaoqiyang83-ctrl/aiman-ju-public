@@ -588,8 +588,11 @@ const STORYBOARD_USER_TEMPLATE = `请将以下剧本拆分为结构化JSON。
 }
 
 【强制约束】
+- 剧本中有几个场景标题（场景一、场景二等），就必须输出几个scene对象，绝对不能合并。每个场景标题对应的镜头放在对应的scene.shots里
+- 不同场景的location不同，必须分别创建独立的scene对象
 - 每个场景至少3个镜头，对话场景每句台词占一个镜头
 - 景别必须有变化，不要全是特写或全是远景
+- 每个镜头的visual_prompt必须根据该镜头的具体内容编写，严禁复制粘贴。不同镜头的scene_description、lighting、color_palette必须不同
 - visual_prompt的lighting必须写具体色温如"黄昏侧逆光，色温3200K，金色光晕"
 - visual_prompt的color_palette必须包含hex色值如"#E8913A"
 - visual_prompt的composition必须指明构图法则如"三分法构图，人物位于右侧交叉点"
@@ -2150,10 +2153,9 @@ function fixCameraMovementDiversity(shots) {
 }
 
 /**
- * v6.2.1 规则：描述多样性检查
- * 遍历同一scene内的所有shots
- * 如果连续2个shot的scene_description完全相同，为后一个shot添加差异化描述
- * 差异化方式：在description前追加动作描述（从action_prompt提取）
+ * v7.0.3 描述多样性检查（全字段+全局检测）
+ * 检查所有视觉描述字段（scene_description/lighting/color_palette/composition/character_placement/facial_detail）
+ * 不仅比较相邻shot，而是全局检测重复，确保每个shot的视觉描述有差异
  */
 function applyDescriptionDiversity(scene) {
     var shots = scene.shots;
@@ -2161,56 +2163,95 @@ function applyDescriptionDiversity(scene) {
     
     console.log('[Director Engine] 执行描述多样性检查，共 ' + shots.length + ' 个分镜');
     
-    for (var i = 1; i < shots.length; i++) {
-        var currentShot = shots[i];
-        var prevShot = shots[i - 1];
+    var descFields = ["scene_description", "lighting", "color_palette", "composition", "character_placement", "facial_detail"];
+    
+    // 构建每个字段的使用记录，检测全局重复
+    for (var fi = 0; fi < descFields.length; fi++) {
+        var field = descFields[fi];
+        var seenValues = {};
         
-        var currentVp = currentShot.visual_prompt || {};
-        var prevVp = prevShot.visual_prompt || {};
-        
-        var currentDesc = String(currentVp.scene_description || '').trim();
-        var prevDesc = String(prevVp.scene_description || '').trim();
-        
-        // 检查scene_description是否完全相同
-        if (currentDesc && prevDesc && currentDesc === prevDesc) {
-            console.log('[Director Engine] 检测到连续相同描述: 分镜' + i + ' 与 分镜' + (i + 1) + ' - "' + currentDesc + '"');
+        for (var i = 0; i < shots.length; i++) {
+            var shot = shots[i];
+            var vp = shot.visual_prompt || {};
+            var val = String(vp[field] || "").trim();
             
-            // 从action_prompt提取动作描述
-            var currentAction = '';
-            if (currentShot.action_prompt && currentShot.action_prompt.physical_action) {
-                currentAction = String(currentShot.action_prompt.physical_action).trim();
-            }
+            if (!val) continue;
             
-            if (currentAction) {
-                // 追加动作描述到scene_description前面
-                currentVp.scene_description = currentAction + '，' + currentDesc;
-                console.log('[Director Engine] 添加动作差异化: "' + currentAction + '，' + currentDesc + '"');
-            } else {
-                // 如果没有动作描述，尝试从original_text提取
-                var originalText = String(currentShot.original_text || '').trim();
-                if (originalText) {
-                    // 截取前20个字符作为补充描述
-                    var shortAction = originalText.substring(0, Math.min(20, originalText.length));
-                    currentVp.scene_description = shortAction + '，' + currentDesc;
-                    console.log('[Director Engine] 从original_text添加差异化: "' + shortAction + '，' + currentDesc + '"');
+            if (seenValues[val]) {
+                // 找到重复值，需要差异化
+                console.log("[Director Engine] 检测到重复" + field + ": 分镜" + (i + 1) + " 与 分镜" + seenValues[val] + " - "" + val.substring(0, 30) + "..."");
+                
+                var diversified = diversifyFieldValue(shot, field, val, i);
+                if (diversified !== val) {
+                    vp[field] = diversified;
+                    console.log("[Director Engine] 差异化修复: "" + diversified.substring(0, 40) + "..."");
                 }
-            }
-        }
-        
-        // 检查character_placement是否完全相同
-        var currentCharPlacement = String(currentVp.character_placement || '').trim();
-        var prevCharPlacement = String(prevVp.character_placement || '').trim();
-        
-        if (currentCharPlacement && prevCharPlacement && currentCharPlacement === prevCharPlacement) {
-            console.log('[Director Engine] 检测到连续相同角色位置: 分镜' + i + ' 与 分镜' + (i + 1));
-            
-            // 添加景别信息作为区分
-            var currentShotType = currentShot.shot_type || '';
-            if (currentShotType) {
-                currentVp.character_placement = currentShotType + '镜头视角，' + currentCharPlacement;
+            } else {
+                seenValues[val] = i + 1;
             }
         }
     }
+}
+
+/**
+ * 对重复的字段值进行差异化处理
+ */
+function diversifyFieldValue(shot, field, originalValue, shotIndex) {
+    // 提取可用的差异化信息
+    var action = "";
+    if (shot.action_prompt && shot.action_prompt.physical_action) {
+        action = String(shot.action_prompt.physical_action).trim();
+    }
+    var dialogue = String(shot.dialogue || "").trim();
+    var emotion = shot.emotion_cue && shot.emotion_cue.primary_emotion || "";
+    var shotType = shot.shot_type || "";
+    var originalText = String(shot.original_text || "").trim();
+    
+    // 根据字段类型进行差异化
+    if (field === "scene_description") {
+        if (action) return action + "，" + originalValue;
+        if (dialogue) return originalValue + "（" + dialogue.substring(0, 15) + "）";
+        if (originalText) return originalText.substring(0, 20) + "，" + originalValue;
+    }
+    
+    if (field === "lighting") {
+        var lightMods = ["侧逆光", "顶光", "底光", "轮廓光", "漫射光"];
+        var colorTemps = ["2800K", "3200K", "4000K", "4500K", "5600K", "6500K"];
+        var modIdx = shotIndex % lightMods.length;
+        var tempIdx = shotIndex % colorTemps.length;
+        return lightMods[modIdx] + "，色温" + colorTemps[tempIdx] + "，" + originalValue;
+    }
+    
+    if (field === "color_palette") {
+        var colorHints = {
+            "远景": "冷色调为主",
+            "全景": "自然色调",
+            "中景": "中性色调",
+            "近景": "暖色调增强",
+            "特写": "高对比色调",
+            "大特写": "饱和色调"
+        };
+        var hint = colorHints[shotType] || "中性色调";
+        return hint + "，" + originalValue;
+    }
+    
+    if (field === "composition") {
+        var compAddons = ["前景遮挡", "纵深引导", "框架构图", "留白构图", "动态模糊", "镜像构图"];
+        var addon = compAddons[shotIndex % compAddons.length];
+        return addon + "，" + originalValue;
+    }
+    
+    if (field === "character_placement") {
+        if (shotType) return shotType + "镜头视角，" + originalValue;
+        if (emotion) return emotion + "状态，" + originalValue;
+    }
+    
+    if (field === "facial_detail") {
+        if (emotion) return emotion + "表情，" + originalValue;
+        if (dialogue) return "说话时" + originalValue;
+    }
+    
+    return originalValue;
 }
 
 function fixDurationReasonableness(shot, shotType) {
