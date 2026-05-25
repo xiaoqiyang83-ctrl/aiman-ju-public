@@ -376,6 +376,10 @@
                 >
                   <!-- 场景头部信息（可折叠） -->
                   <div class="scene-header-enhanced" @click="toggleSceneExpand(scene)">
+                    <!-- 场景概念图缩略图 -->
+                    <div v-if="scene.scene_image_url" class="scene-concept-thumb">
+                      <el-image :src="getAssetUrl(scene.scene_image_url)" fit="cover" :preview-src-list="[getAssetUrl(scene.scene_image_url)]" preview-teleported />
+                    </div>
                     <div class="scene-badge">
                       <span class="scene-number-enhanced">场景 {{ scene.scene_number || 1 }}</span>
                     </div>
@@ -1131,7 +1135,6 @@
                               
                               <!-- 操作按钮行 -->
                               <div class="detail-bottom-actions">
-                                <el-button size="small" type="primary" :loading="regeneratingShot" @click.stop="currentShot = shot; currentScene = scene; handleRegenerateShot()">重新生成</el-button>
                                 <el-button size="small" link :disabled="idx === 0" @click.stop="handleMoveShot(scene, shot, 'up')"><el-icon><ArrowUp /></el-icon></el-button>
                                 <el-button size="small" link :disabled="idx === (scene.shots?.length || 0) - 1" @click.stop="handleMoveShot(scene, shot, 'down')"><el-icon><ArrowDown /></el-icon></el-button>
                               </div>
@@ -6454,6 +6457,20 @@ const handleMoveShot = async (scene, shot, direction) => {
   gap: 16px;
   border-bottom: none;
   flex-wrap: wrap;
+}
+
+.scene-concept-thumb {
+  width: 90px;
+  height: 54px;
+  border-radius: 8px;
+  overflow: hidden;
+  flex-shrink: 0;
+  border: 2px solid rgba(255,255,255,0.3);
+}
+
+.scene-concept-thumb .el-image {
+  width: 100%;
+  height: 100%;
 }
 
 .scene-badge {
