@@ -415,174 +415,115 @@
                     <div v-if="!scene.shots?.length" class="scene-empty-shots-hint">
                       该场景暂无镜头，点击「添加镜头」新建，或通过剧本重新生成分镜。
                     </div>
-                  <div class="shots-grid">
-                    <div 
-                      v-for="(shot, idx) in scene.shots" 
-                      :key="shot.id || `shot-${scene.id}-${idx}`"
-                      class="shot-card-enhanced"
-                      :class="{ 
-                        completed: shot.video_status === 'completed', 
-                        generating: shot.video_status === 'generating' || shot.video_status === 'processing',
-                        selected: selectedShotIds.includes(shot.id),
-                        dragging: dragIndex === idx,
-                        'drag-over': dragOverIndex === idx
-                      }"
-                      draggable="true"
-                      @click="handleShotClick(shot)"
-                      @dragstart="handleDragStart($event, idx)"
-                      @dragover.prevent="handleDragOver($event, idx)"
-                      @drop="handleDrop($event, idx, scene)"
-                      @dragend="handleDragEnd"
-                    >
-                      <!-- 缩略图区域 -->
-                      <div class="shot-thumb-enhanced" @click.stop>
-                        <el-image v-if="shot.thumbnail || shot.video_url || shot.result_url" :src="getAssetUrl(shot.thumbnail || shot.video_url || shot.result_url)" fit="cover" :preview-src-list="[getAssetUrl(shot.thumbnail || shot.video_url || shot.result_url)]" preview-teleported class="shot-preview-image" />
-                        <el-image v-else-if="shot.scene_image_url" :src="getAssetUrl(shot.scene_image_url)" fit="cover" :preview-src-list="[getAssetUrl(shot.scene_image_url)]" preview-teleported alt="AI生成图" class="shot-ref-image-thumb shot-preview-image" />
-                        <el-image v-else-if="shot.reference_image_url" :src="getAssetUrl(shot.reference_image_url)" fit="cover" :preview-src-list="[getAssetUrl(shot.reference_image_url)]" preview-teleported alt="场景参考图" class="shot-ref-image-thumb shot-preview-image" />
-                        <div v-else class="thumb-placeholder-enhanced">
-                          <el-icon :size="32"><VideoPlay /></el-icon>
-                          <span>暂无预览</span>
+                    
+                    <!-- ========== 新时间轴行布局 ========== -->
+                    <div class="shots-timeline">
+                      <div 
+                        v-for="(shot, idx) in scene.shots" 
+                        :key="shot.id || `shot-${scene.id}-${idx}`"
+                        class="shot-row"
+                        :class="{ 
+                          completed: shot.video_status === 'completed', 
+                          generating: shot.video_status === 'generating' || shot.video_status === 'processing',
+                          selected: selectedShotIds.includes(shot.id)
+                        }"
+                      >
+                        <!-- 时间轴节点 -->
+                        <div class="timeline-node">
+                          <div class="timeline-dot" :class="{ active: expandedShotIds.includes(shot.id || `shot-${scene.id}-${idx}`) }"></div>
+                          <div v-if="idx < scene.shots.length - 1" class="timeline-line"></div>
                         </div>
-                        <div class="shot-overlay">
-                          <el-button v-if="shot.video_status === 'completed'" size="small" type="success" @click.stop="handlePreviewShotVideo(shot)">
-                            <el-icon><View /></el-icon>
-                            预览
-                          </el-button>
-                          <el-button v-else-if="shot.video_status === 'generating' || shot.video_status === 'processing' || shot.video_status === 'pending'" size="small" type="warning" disabled>
-                            <el-icon :size="16"><Loading /></el-icon>
-                            生成中
-                          </el-button>
-                          <template v-else>
-                            <el-button size="small" type="danger" @click.stop="handleGenerateCogVideo(shot)" :disabled="!shot.scene_image_url" :title="shot.scene_image_url ? '使用CogVideoX生成视频' : '需要先有首帧图'">
-                              <el-icon><VideoPlay /></el-icon>
-                              CogVideo
-                            </el-button>
-                          </template>
-                            <el-select :model-value="getShotImageSize(shot.id)" @update:model-value="(val) => setShotImageSize(shot.id, val)" size="small" style="width: 100px;" title="选择该分镜的生图尺寸（可覆盖全局）">
-                            <el-option v-for="(item, key) in IMAGE_SIZE_MAP" :key="key" :label="item.label" :value="key" />
-                          </el-select>
-                          <el-button
-                            size="small" 
-                            type="success"
-                            :loading="generatingShotImage[shot.id]"
-                            @click.stop="handleGenShotImage(shot)"
-                          >
-                            <el-icon><Picture /></el-icon>
-                            生图
-                          </el-button>
-                          <el-upload
-                            class="shot-upload-btn"
-                            action="#"
-                            :show-file-list="false"
-                            :auto-upload="false"
-                            :on-change="(file) => handleShotRefUpload(file, shot)"
-                            @click.stop
-                          >
-                            <el-button size="small" type="info">
-                              <el-icon><Upload /></el-icon>
-                              场景参考图
-                            </el-button>
-                          </el-upload>
+                        
+                        <!-- 折叠行：点击展开/折叠 -->
+                        <div class="shot-summary" @click="toggleShotExpand(shot.id || `shot-${scene.id}-${idx}`)">
+                          <!-- 小缩略图 -->
+                          <div class="shot-mini-thumb">
+                            <el-image v-if="shot.thumbnail || shot.video_url || shot.result_url" :src="getAssetUrl(shot.thumbnail || shot.video_url || shot.result_url)" fit="cover" />
+                            <el-image v-else-if="shot.scene_image_url" :src="getAssetUrl(shot.scene_image_url)" fit="cover" />
+                            <el-image v-else-if="shot.reference_image_url" :src="getAssetUrl(shot.reference_image_url)" fit="cover" />
+                            <div v-else class="thumb-placeholder-mini"><el-icon :size="16"><VideoPlay /></el-icon></div>
+                          </div>
+                          <!-- 编号 -->
+                          <span class="shot-row-index">#{{ shot.shot_number ?? (idx + 1) }}</span>
+                          <!-- 景别+运镜 -->
+                          <div class="shot-row-tags">
+                            <el-tag size="small" type="info">{{ shot.shot_type || '中景' }}</el-tag>
+                            <el-tag v-if="shot.camera_movement && shot.camera_movement !== '固定镜头'" size="small" type="warning">{{ shot.camera_movement }}</el-tag>
+                            <span class="shot-duration">{{ shot.duration || 3 }}秒</span>
+                            <el-tag v-if="shot.video_status === 'completed'" type="success" size="small">已完成</el-tag>
+                          </div>
+                          <!-- 台词（截断） -->
+                          <div class="shot-row-dialogue" v-if="shot.dialogue || getNarration(shot)">
+                            <span v-if="shot.dialogue" class="dialogue-preview">💬 {{ shot.dialogue }}</span>
+                            <span v-if="getNarration(shot)" class="narration-preview">📖 {{ getNarration(shot) }}</span>
+                          </div>
+                          <!-- 展开箭头 -->
+                          <el-icon class="expand-arrow" :class="{ expanded: expandedShotIds.includes(shot.id || `shot-${scene.id}-${idx}`) }"><ArrowDown /></el-icon>
                         </div>
-                        <span class="shot-index">#{{ shot.shot_number ?? (idx + 1) }}</span>
-                        <el-tag v-if="shot.video_status === 'completed'" class="shot-status-tag" type="success" size="small">已完成</el-tag>
-                        <el-tag v-else-if="!shot.scene_image_url && !shot.video_status" class="shot-status-tag" type="info" size="small">待生成</el-tag>
-                        <el-tag v-else-if="shot.video_status && shot.video_status !== 'completed'" class="shot-status-tag" :type="getShotStatusType(shot.video_status)" size="small">{{ getShotStatusText(shot.video_status) }}</el-tag>
+                        
+                        <!-- 展开详情区域 -->
+                        <div v-if="expandedShotIds.includes(shot.id || `shot-${scene.id}-${idx}`)" class="shot-detail-panel">
+                          <!-- 大缩略图+操作按钮 -->
+                          <div class="detail-left">
+                            <div class="shot-detail-thumb">
+                              <el-image v-if="shot.thumbnail || shot.video_url || shot.result_url" :src="getAssetUrl(shot.thumbnail || shot.video_url || shot.result_url)" fit="cover" :preview-src-list="[getAssetUrl(shot.thumbnail || shot.video_url || shot.result_url)]" preview-teleported />
+                              <el-image v-else-if="shot.scene_image_url" :src="getAssetUrl(shot.scene_image_url)" fit="cover" :preview-src-list="[getAssetUrl(shot.scene_image_url)]" preview-teleported />
+                              <el-image v-else-if="shot.reference_image_url" :src="getAssetUrl(shot.reference_image_url)" fit="cover" :preview-src-list="[getAssetUrl(shot.reference_image_url)]" preview-teleported />
+                              <div v-else class="thumb-placeholder-enhanced"><el-icon :size="32"><VideoPlay /></el-icon><span>暂无预览</span></div>
+                            </div>
+                            <div class="detail-actions">
+                              <el-button v-if="shot.video_status === 'completed'" size="small" type="success" @click.stop="handlePreviewShotVideo(shot)"><el-icon><View /></el-icon>预览</el-button>
+                              <el-button v-else-if="!shot.video_status || shot.video_status === 'failed'" size="small" type="danger" @click.stop="handleGenerateCogVideo(shot)" :disabled="!shot.scene_image_url"><el-icon><VideoPlay /></el-icon>CogVideo</el-button>
+                              <el-button v-else size="small" type="warning" disabled><el-icon><Loading /></el-icon>生成中</el-button>
+                              <el-button size="small" type="success" :loading="generatingShotImage[shot.id]" @click.stop="handleGenShotImage(shot)"><el-icon><Picture /></el-icon>生图</el-button>
+                              <el-upload action="#" :show-file-list="false" :auto-upload="false" :on-change="(file) => handleShotRefUpload(file, shot)" @click.stop>
+                                <el-button size="small" type="info"><el-icon><Upload /></el-icon>场景参考图</el-button>
+                              </el-upload>
+                              <el-select :model-value="getShotImageSize(shot.id)" @update:model-value="(val) => setShotImageSize(shot.id, val)" size="small" style="width: 100px;">
+                                <el-option v-for="(item, key) in IMAGE_SIZE_MAP" :key="key" :label="item.label" :value="key" />
+                              </el-select>
+                            </div>
+                          </div>
+                          <!-- 右侧详情信息 -->
+                          <div class="detail-right">
+                            <!-- 结构化提示词 -->
+                            <div class="shot-prompt-section" v-if="getVisualPrompt(shot)">
+                              <div class="prompt-color-bar" v-if="getVisualPrompt(shot).color_palette"><span class="prompt-label">🎨</span><span class="prompt-text">{{ getVisualPrompt(shot).color_palette }}</span></div>
+                              <div class="prompt-line" v-if="getVisualPrompt(shot).lighting"><span class="prompt-label">💡</span><span class="prompt-text">{{ getVisualPrompt(shot).lighting }}</span></div>
+                              <div class="prompt-line" v-if="getVisualPrompt(shot).character_placement"><span class="prompt-label">🎭</span><span class="prompt-text">{{ getVisualPrompt(shot).character_placement }}</span></div>
+                              <div class="prompt-line" v-if="getVisualPrompt(shot).composition"><span class="prompt-label">📐</span><span class="prompt-text">{{ getVisualPrompt(shot).composition }}</span></div>
+                              <div class="prompt-line" v-if="getActionPrompt(shot)?.physical_action"><span class="prompt-label">🎬</span><span class="prompt-text">{{ getActionPrompt(shot).physical_action }}</span></div>
+                              <div class="prompt-line" v-if="getEmotionCue(shot)?.primary_emotion"><span class="prompt-label">{{ getEmotionEmoji(getEmotionCue(shot).primary_emotion) }}</span><span class="prompt-text">{{ getEmotionCue(shot).primary_emotion }}</span></div>
+                            </div>
+                            <p v-else class="shot-description">{{ shot.visual_description || shot.description || '暂无描述' }}</p>
+                            <!-- 完整台词/旁白 -->
+                            <div class="shot-dialogue-row" v-if="shot.dialogue || getNarration(shot)">
+                              <span v-if="shot.dialogue" class="shot-dialogue">💬 {{ shot.dialogue }}</span>
+                              <span v-if="getNarration(shot)" class="shot-narration">📖 {{ getNarration(shot) }}</span>
+                            </div>
+                            <!-- 运镜 -->
+                            <div class="shot-camera"><el-icon><Monitor /></el-icon><span>{{ shot.camera_movement || '固定镜头' }}</span></div>
+                            <!-- 操作按钮行 -->
+                            <div class="detail-bottom-actions">
+                              <el-button size="small" type="primary" link @click.stop="handleShotClick(shot)">编辑</el-button>
+                              <el-button size="small" link :disabled="idx === 0" @click.stop="handleMoveShot(scene, shot, 'up')"><el-icon><ArrowUp /></el-icon></el-button>
+                              <el-button size="small" link :disabled="idx === (scene.shots?.length || 0) - 1" @click.stop="handleMoveShot(scene, shot, 'down')"><el-icon><ArrowDown /></el-icon></el-button>
+                              <el-button v-if="shot.id" size="small" type="danger" link @click.stop="handleDeleteShot(shot, scene)">删除</el-button>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                       
-                      <!-- 镜头信息 -->
-                      <div class="shot-info-enhanced">
-                        <div class="shot-type-row">
-                          <el-tag size="small" type="info">{{ shot.shot_type || '中景' }}</el-tag>
-                          <el-tag v-if="shot.camera_angle && shot.camera_angle !== '平视'" size="small" type="warning">{{ shot.camera_angle }}</el-tag>
-                          <span class="shot-duration">{{ shot.duration || 3 }}秒</span>
-                          <el-button size="small" type="primary" link @click.stop="handleShotClick(shot)">编辑</el-button>
-                          <el-button
-                            size="small"
-                            link
-                            :disabled="idx === 0"
-                            @click.stop="handleMoveShot(scene, shot, 'up')"
-                          >
-                            <el-icon><ArrowUp /></el-icon>
-                          </el-button>
-                          <el-button
-                            size="small"
-                            link
-                            :disabled="idx === (scene.shots?.length || 0) - 1"
-                            @click.stop="handleMoveShot(scene, shot, 'down')"
-                          >
-                            <el-icon><ArrowDown /></el-icon>
-                          </el-button>
-                          <el-button
-                            v-if="shot.id"
-                            size="small"
-                            type="danger"
-                            link
-                            @click.stop="handleDeleteShot(shot, scene)"
-                          >
-                            删除
-                          </el-button>
-                        </div>
-                        
-                        <!-- 结构化提示词区域 -->
-                        <div class="shot-prompt-section" v-if="getVisualPrompt(shot)">
-                          <!-- 色彩条 -->
-                          <div class="prompt-color-bar" v-if="getVisualPrompt(shot).color_palette">
-                            <span class="prompt-label">🎨</span>
-                            <span class="prompt-text">{{ getVisualPrompt(shot).color_palette }}</span>
-                          </div>
-                          <!-- 光影 -->
-                          <div class="prompt-line" v-if="getVisualPrompt(shot).lighting">
-                            <span class="prompt-label">💡</span>
-                            <span class="prompt-text">{{ getVisualPrompt(shot).lighting }}</span>
-                          </div>
-                          <!-- 角色站位 -->
-                          <div class="prompt-line" v-if="getVisualPrompt(shot).character_placement">
-                            <span class="prompt-label">🎭</span>
-                            <span class="prompt-text">{{ getVisualPrompt(shot).character_placement }}</span>
-                          </div>
-                          <!-- 构图 -->
-                          <div class="prompt-line" v-if="getVisualPrompt(shot).composition">
-                            <span class="prompt-label">📐</span>
-                            <span class="prompt-text">{{ getVisualPrompt(shot).composition }}</span>
-                          </div>
-                          <!-- 动作 -->
-                          <div class="prompt-line" v-if="getActionPrompt(shot)?.physical_action">
-                            <span class="prompt-label">🎬</span>
-                            <span class="prompt-text">{{ getActionPrompt(shot).physical_action }}</span>
-                          </div>
-                          <!-- 情绪 -->
-                          <div class="prompt-line" v-if="getEmotionCue(shot)?.primary_emotion">
-                            <span class="prompt-label">{{ getEmotionEmoji(getEmotionCue(shot).primary_emotion) }}</span>
-                            <span class="prompt-text">{{ getEmotionCue(shot).primary_emotion }}</span>
-                          </div>
-                        </div>
-                        
-                        <!-- 兼容旧数据：没有结构化提示词时显示原description -->
-                        <p v-else class="shot-description">{{ shot.visual_description || shot.description || '暂无描述' }}</p>
-                        
-                        <!-- 台词/旁白 -->
-                        <div class="shot-dialogue-row" v-if="shot.dialogue || getNarration(shot)">
-                          <span v-if="shot.dialogue" class="shot-dialogue">💬 {{ shot.dialogue }}</span>
-                          <span v-if="getNarration(shot)" class="shot-narration">📖 {{ getNarration(shot) }}</span>
-                        </div>
-                        
-                        <!-- 运镜 -->
-                        <div class="shot-camera">
-                          <el-icon><Monitor /></el-icon>
-                          <span>{{ shot.camera_movement || '固定镜头' }}</span>
+                      <!-- 添加镜头按钮 -->
+                      <div class="shot-row add-shot-row" @click="handleAddShot(scene)">
+                        <div class="timeline-node"><div class="timeline-dot add"></div></div>
+                        <div class="shot-summary add-shot-summary">
+                          <el-icon :size="20"><Plus /></el-icon>
+                          <span>添加镜头</span>
                         </div>
                       </div>
                     </div>
-                    
-                    <!-- 添加镜头按钮 -->
-                    <div class="shot-card-enhanced add-shot" @click="handleAddShot(scene)">
-                      <div class="add-shot-icon">
-                        <el-icon :size="40"><Plus /></el-icon>
-                      </div>
-                      <span>添加镜头</span>
-                    </div>
-                  </div>
+                    <!-- ========== 时间轴行布局结束 ========== -->
                   </div><!-- scene-body 结束 -->
                 </div>
                 
@@ -2288,6 +2229,18 @@ const showSceneDetailDialog = ref(false)
 const savingSceneDetail = ref(false)
 const currentScene = ref(null)
 const selectedShotIds = ref([])
+
+// ==================== v6.4 镜头展开/折叠 ====================
+const expandedShotIds = ref([]) // 展开的镜头ID列表
+
+const toggleShotExpand = (shotId) => {
+  const idx = expandedShotIds.value.indexOf(shotId)
+  if (idx === -1) {
+    expandedShotIds.value.push(shotId)
+  } else {
+    expandedShotIds.value.splice(idx, 1)
+  }
+}
 
 // ==================== v6.3 分镜拖拽排序 ====================
 const dragIndex = ref(-1)
@@ -6158,6 +6111,251 @@ const handleMoveShot = async (scene, shot, direction) => {
 
 .shot-card-enhanced.add-shot:hover .add-shot-icon {
   color: #409eff;
+}
+
+/* ========== 时间轴行布局样式 ========== */
+.shots-timeline {
+  padding: 16px 20px;
+  background: #fafbfc;
+}
+
+.shot-row {
+  display: flex;
+  flex-wrap: wrap;
+  position: relative;
+  min-height: 48px;
+  transition: all 0.2s ease;
+}
+
+.shot-row:hover {
+  background: #f0f5ff;
+}
+
+.shot-row.completed {
+  border-left: 3px solid #67c23a;
+}
+
+.shot-row.generating {
+  border-left: 3px solid #e6a23c;
+  animation: pulse 2s infinite;
+}
+
+/* 时间轴节点 */
+.timeline-node {
+  width: 32px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+}
+
+.timeline-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #c0c4cc;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 2px #dcdfe6;
+  flex-shrink: 0;
+  margin-top: 18px;
+  transition: all 0.3s;
+  z-index: 1;
+}
+
+.timeline-dot.active {
+  background: #409eff;
+  box-shadow: 0 0 0 2px #409eff;
+}
+
+.timeline-dot.add {
+  background: #67c23a;
+  box-shadow: 0 0 0 2px #67c23a;
+}
+
+.timeline-line {
+  width: 2px;
+  flex: 1;
+  background: #dcdfe6;
+  min-height: 20px;
+}
+
+/* 折叠摘要行 */
+.shot-summary {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: background 0.2s;
+  min-height: 48px;
+}
+
+.shot-summary:hover {
+  background: #ecf5ff;
+}
+
+.add-shot-summary {
+  color: #909399;
+  gap: 8px;
+}
+
+.add-shot-summary:hover {
+  color: #409eff;
+}
+
+/* 小缩略图 */
+.shot-mini-thumb {
+  width: 48px;
+  height: 36px;
+  border-radius: 4px;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: #f5f7fa;
+  border: 1px solid #e4e7ed;
+}
+
+.shot-mini-thumb .el-image {
+  width: 100%;
+  height: 100%;
+}
+
+.shot-mini-thumb .el-image :deep(.el-image__inner) {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.thumb-placeholder-mini {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #c0c4cc;
+  background: #f5f7fa;
+}
+
+.shot-row-index {
+  font-size: 13px;
+  font-weight: 600;
+  color: #606266;
+  flex-shrink: 0;
+  min-width: 28px;
+}
+
+.shot-row-tags {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.shot-row-dialogue {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.dialogue-preview, .narration-preview {
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 300px;
+}
+
+.dialogue-preview {
+  color: #409eff;
+}
+
+.narration-preview {
+  color: #909399;
+  font-style: italic;
+}
+
+.expand-arrow {
+  color: #c0c4cc;
+  transition: transform 0.3s;
+  flex-shrink: 0;
+  font-size: 14px;
+}
+
+.expand-arrow.expanded {
+  transform: rotate(180deg);
+  color: #409eff;
+}
+
+/* 展开详情面板 */
+.shot-detail-panel {
+  width: 100%;
+  margin-left: 32px;
+  padding: 16px;
+  display: flex;
+  gap: 20px;
+  background: #fff;
+  border-radius: 12px;
+  border: 1px solid #e4e7ed;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+  animation: detailSlideDown 0.25s ease;
+  margin-bottom: 8px;
+}
+
+@keyframes detailSlideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.detail-left {
+  width: 240px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.shot-detail-thumb {
+  width: 100%;
+  height: 160px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #f5f7fa;
+}
+
+.shot-detail-thumb .el-image,
+.shot-detail-thumb .el-image :deep(.el-image__inner) {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.detail-right {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.detail-bottom-actions {
+  display: flex;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #f0f2f5;
+}
+
+.add-shot-row {
+  cursor: pointer;
 }
 
 /* 视频列表 */
