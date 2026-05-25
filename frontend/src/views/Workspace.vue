@@ -2935,21 +2935,6 @@ const handleBatchGenerateVideoForScene = async (scene) => {
   }
 }
 
-// 视频prompt预览：组合各子字段生成完整描述
-const getVideoPromptPreview = (shot) => {
-  const vp = getVisualPrompt(shot)
-  const ap = getActionPrompt(shot)
-  const parts = []
-  if (vp?.scene_description) parts.push(vp.scene_description)
-  if (vp?.character_placement) parts.push(vp.character_placement)
-  if (ap?.physical_action) parts.push(ap.physical_action)
-  if (vp?.lighting) parts.push(vp.lighting)
-  if (vp?.composition) parts.push(vp.composition)
-  if (vp?.color_palette) parts.push(vp.color_palette)
-  if (shot.visual_description && !parts.length) parts.push(shot.visual_description)
-  return parts.join("，")
-}
-
 // ==================== 视频裁剪相关 ====================
 const showTrimDialog = ref(false)
 const trimVideoUrl = ref('')
