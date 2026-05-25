@@ -2529,6 +2529,111 @@ function extractCharactersFromShots(shots) {
  * 从剧本原文提取场景标题列表
  */
 /**
+ * v7.1.7 回填original_text：为每个shot填充它对应的剧本原文片段
+ * 策略：将剧本按△分段，每个场景的shots按顺序对应各段原文
+ */
+function fillOriginalTextFromScript(data, scriptContent) {
+    if (!data || !Array.isArray(data.scenes) || !scriptContent) return data;
+    
+    // 将剧本按场景标题分段
+    var scriptLines = scriptContent.split('\n');
+    var segments = []; // [{title, startLine, endLine, text}]
+    var currentSeg = null;
+    
+    for (var i = 0; i < scriptLines.length; i++) {
+        var line = scriptLines[i].trim();
+        // 检测场景标题行（场景一、场景1、场景二 等，或【场景】标记）
+        if (/^(场景\s*[\d一二三四五六七八九十]+|【.*?】|第[\d一二三四五六七八九十]+[章节幕])/.test(line)) {
+            if (currentSeg) {
+                currentSeg.endLine = i - 1;
+                currentSeg.text = scriptLines.slice(currentSeg.startLine, i).join('\n').trim();
+            }
+            currentSeg = { title: line, startLine: i, endLine: scriptLines.length - 1, text: '' };
+            segments.push(currentSeg);
+        }
+    }
+    if (currentSeg) {
+        currentSeg.text = scriptLines.slice(currentSeg.startLine).join('\n').trim();
+    }
+    
+    // 如果没有按场景分段，整段作为一个
+    if (segments.length === 0) {
+        segments.push({ title: '全文', startLine: 0, endLine: scriptLines.length - 1, text: scriptContent.trim() });
+    }
+    
+    console.log('[fillOriginalText] 剧本分为 ' + segments.length + ' 段');
+    
+    // 为每个场景的shots分配对应的原文段落
+    for (var si = 0; si < data.scenes.length; si++) {
+        var scene = data.scenes[si];
+        if (!Array.isArray(scene.shots) || !scene.shots.length) continue;
+        
+        // 找到这个场景对应的剧本段落
+        var segText = '';
+        // 优先用scene.content（AI返回的场景正文）
+        if (scene.content && scene.content.trim()) {
+            segText = scene.content.trim();
+        } else if (si < segments.length) {
+            segText = segments[si].text;
+        } else {
+            segText = segments[segments.length - 1].text;
+        }
+        
+        // 如果段落不为空，将段落文本按镜头数量均分
+        // 更好的策略：每个shot用台词在段落中定位
+        for (var j = 0; j < scene.shots.length; j++) {
+            var shot = scene.shots[j];
+            // 如果已有original_text且非空，跳过
+            if (shot.original_text && shot.original_text.trim()) continue;
+            
+            // 策略1：如果shot有dialogue，在段落中找包含这段台词的上下文
+            if (shot.dialogue && shot.dialogue.trim()) {
+                var pureDialogue = shot.dialogue.replace(/^[@\uff20][^\s：:]+[：:\s]/, '').trim();
+                var lineIdx = findTextInSegment(segText, pureDialogue);
+                if (lineIdx >= 0) {
+                    // 取台词前后各1-2行作为上下文
+                    var segLines = segText.split('\n');
+                    var start = Math.max(0, lineIdx - 1);
+                    var end = Math.min(segLines.length - 1, lineIdx + 1);
+                    shot.original_text = segLines.slice(start, end + 1).join('\n').trim();
+                    continue;
+                }
+            }
+            
+            // 策略2：没有台词或找不到，用段落中对应位置的片段
+            if (segText) {
+                var segLines2 = segText.split('\n').filter(function(l) { return l.trim(); });
+                if (segLines2.length <= scene.shots.length) {
+                    // 段落行数不多，整段作为original_text
+                    shot.original_text = segText;
+                } else {
+                    // 按镜头序号均分行
+                    var linesPerShot = Math.ceil(segLines2.length / scene.shots.length);
+                    var s = j * linesPerShot;
+                    var e = Math.min((j + 1) * linesPerShot, segLines2.length);
+                    shot.original_text = segLines2.slice(s, e).join('\n').trim();
+                }
+            }
+        }
+    }
+    
+    return data;
+}
+
+/**
+ * 在段落文本中查找包含目标文本的行号
+ */
+function findTextInSegment(segment, targetText) {
+    if (!segment || !targetText) return -1;
+    var lines = segment.split('\n');
+    var shortTarget = targetText.substring(0, Math.min(15, targetText.length));
+    for (var i = 0; i < lines.length; i++) {
+        if (lines[i].includes(shortTarget)) return i;
+    }
+    return -1;
+}
+
+/**
  * 强制台词校验：用剧本原文的真实台词替换AI编造的台词
  * 核心逻辑：从剧本原文提取所有真实台词，跟AI输出的dialogue逐条比对
  * 如果AI编造了剧本中不存在的台词，用剧本原台词替换
@@ -3152,6 +3257,12 @@ async function generateStoryboardFromScript(params) {
         normalized = enforceDialogueFromScript(normalized, scriptContent);
     } catch(e) {
         console.log('[Dialogue Enforce Final] 执行出错: ' + (e && e.message));
+    }
+    // v7.1.7 回填original_text：为每个shot填充对应的剧本原文片段
+    try {
+        normalized = fillOriginalTextFromScript(normalized, scriptContent);
+    } catch(e) {
+        console.log('[fillOriginalText] 执行出错: ' + (e && e.message));
     }
     var compiled = compilePromptsForStoryboard(normalized);
     

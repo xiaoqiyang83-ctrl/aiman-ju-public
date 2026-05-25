@@ -418,11 +418,6 @@
                   
                   <!-- 镜头卡片网格（折叠显示，点击展开） -->
                   <div v-if="expandedSceneIds.includes(scene.id)" class="scene-body">
-                    <!-- 原剧本内容 -->
-                    <div v-if="scene.content" class="scene-script-preview">
-                      <div class="scene-script-label">原剧本</div>
-                      <div class="scene-script-text">{{ scene.content }}</div>
-                    </div>
                     <div v-if="!scene.shots?.length" class="scene-empty-shots-hint">
                       该场景暂无镜头，点击「添加镜头」新建，或通过剧本重新生成分镜。
                     </div>
