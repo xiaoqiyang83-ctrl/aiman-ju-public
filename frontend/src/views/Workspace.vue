@@ -476,6 +476,10 @@
                             <span v-if="shot.dialogue" class="dialogue-preview">💬 {{ shot.dialogue }}</span>
                             <span v-if="getNarration(shot)" class="narration-preview">📖 {{ getNarration(shot) }}</span>
                           </div>
+                          <!-- 原剧本片段（截断） -->
+                          <div class="shot-row-original" v-if="shot.original_text" :title="shot.original_text">
+                            📝 {{ shot.original_text.substring(0, 40) }}{{ shot.original_text.length > 40 ? '...' : '' }}
+                          </div>
                           <!-- 展开箭头 -->
                           <el-icon class="expand-arrow" :class="{ expanded: expandedShotIds.includes(shot.id || `shot-${scene.id}-${idx}`) }"><ArrowDown /></el-icon>
                         </div>
@@ -565,6 +569,12 @@
                               <el-form-item label="台词/旁白" class="inline-field-full">
                                 <el-input v-model="shot.dialogue" type="textarea" :rows="2" placeholder="角色台词或旁白内容..." size="small" @blur="handleInlineSave(shot)" />
                               </el-form-item>
+                              
+                              <!-- 原剧本片段（只读） -->
+                              <div v-if="shot.original_text" class="shot-original-text-box">
+                                <div class="original-text-label">📝 原剧本</div>
+                                <div class="original-text-content">{{ shot.original_text }}</div>
+                              </div>
                               
                               <!-- 结构化提示词（只读展示） -->
                               <div class="shot-prompt-section" v-if="getVisualPrompt(shot)">
@@ -6633,6 +6643,39 @@ const handleMoveShot = async (scene, shot, direction) => {
   line-height: 1.6;
   white-space: pre-wrap;
   max-height: 120px;
+  overflow-y: auto;
+}
+
+/* 折叠行原剧本截断 */
+.shot-row-original {
+  font-size: 11px;
+  color: #a0a6b2;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* 展开面板原剧本框 */
+.shot-original-text-box {
+  background: #f8f9fb;
+  border-left: 3px solid #667eea;
+  border-radius: 4px;
+  padding: 6px 10px;
+}
+.original-text-label {
+  font-size: 11px;
+  color: #909399;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+.original-text-content {
+  font-size: 12px;
+  color: #606266;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  max-height: 100px;
   overflow-y: auto;
 }
 
