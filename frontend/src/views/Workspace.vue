@@ -882,11 +882,15 @@
                         </div>
                         <!-- 台词/旁白 -->
                         <div class="td td-dialogue">
-                          <span class="video-cell-text">{{ shot.dialogue || '—' }}</span>
+                          <el-input v-model="shot.dialogue" type="textarea" :rows="2" placeholder="台词或旁白" size="small" @blur="handleInlineSave(shot)" />
                         </div>
                         <!-- 画面描述 -->
                         <div class="td td-desc">
-                          <span class="video-cell-text">{{ shot.visual_description || shot.description || '—' }}</span>
+                          <el-input v-model="shot.video_prompt" type="textarea" :rows="2" placeholder="视频生成描述" size="small" @blur="handleInlineSave(shot)" />
+                          <div v-if="!shot.video_prompt" class="video-prompt-hint">
+                            <span v-if="getVideoPromptPreview(shot)">{{ getVideoPromptPreview(shot) }}</span>
+                            <span v-else>未设置</span>
+                          </div>
                         </div>
                         <!-- 图片状态 -->
                         <div class="td td-img-status">
@@ -2681,6 +2685,21 @@ const handleBatchGenerateVideoForScene = async (scene) => {
   for (const shot of targetShots) {
     await handleGenerateSingle(shot)
   }
+}
+
+// 视频prompt预览：组合各子字段生成完整描述
+const getVideoPromptPreview = (shot) => {
+  const vp = getVisualPrompt(shot)
+  const ap = getActionPrompt(shot)
+  const parts = []
+  if (vp?.scene_description) parts.push(vp.scene_description)
+  if (vp?.character_placement) parts.push(vp.character_placement)
+  if (ap?.physical_action) parts.push(ap.physical_action)
+  if (vp?.lighting) parts.push(vp.lighting)
+  if (vp?.composition) parts.push(vp.composition)
+  if (vp?.color_palette) parts.push(vp.color_palette)
+  if (shot.visual_description && !parts.length) parts.push(shot.visual_description)
+  return parts.join("，")
 }
 
 // ==================== 视频裁剪相关 ====================
@@ -4560,7 +4579,8 @@ const handleInlineSave = async (shot, field) => {
         duration: shot.duration,
         character_id: shot.character_id,
         character_angle: shot.character_angle,
-        reference_image_url: shot.reference_image_url
+        reference_image_url: shot.reference_image_url,
+        video_prompt: shot.video_prompt
       })
       ElMessage.success('已保存')
     } catch (err) {
@@ -6507,21 +6527,22 @@ const handleMoveShot = async (scene, shot, direction) => {
 
 /* 视频Tab场景分组行布局 */
 .video-scene-card {
-  background: #1e1e1e;
-  border-radius: 8px;
+  background: #fff;
+  border-radius: 16px;
   margin: 12px;
   overflow: hidden;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.08);
 }
 .video-scene-header {
   display: flex;
   align-items: center;
   padding: 12px 16px;
-  background: #2d2d2d;
+  background: #f5f7fa;
   cursor: pointer;
   transition: background 0.2s;
 }
 .video-scene-header:hover {
-  background: #333;
+  background: #ecf5ff;
 }
 .video-scene-badge {
   margin-right: 12px;
@@ -6540,7 +6561,7 @@ const handleMoveShot = async (scene, shot, direction) => {
 }
 .video-scene-title {
   font-size: 14px;
-  color: #e0e0e0;
+  color: #303133;
   margin: 0;
   white-space: nowrap;
   overflow: hidden;
@@ -6808,6 +6829,15 @@ const handleMoveShot = async (scene, shot, direction) => {
 }
 .video-shot-row.selected {
   background: #2a3a4a;
+}
+.video-prompt-hint {
+  font-size: 11px;
+  color: #909399;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .video-cell-text {
   font-size: 12px;
