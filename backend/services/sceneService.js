@@ -281,4 +281,6 @@ module.exports = {
   regenerateStoryboard,
   updateScene,
   deleteScene,
+  getSceneById,
+  getCharactersByScriptId,
 };

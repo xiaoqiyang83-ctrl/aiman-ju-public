@@ -452,7 +452,7 @@
                           />
                           <!-- 小缩略图 -->
                           <div class="shot-mini-thumb">
-                            <el-image v-if="shot.thumbnail || shot.video_url || shot.result_url" :src="getAssetUrl(shot.thumbnail || shot.video_url || shot.result_url)" fit="cover" />
+                            <el-image v-if="shot.thumbnail" :src="getAssetUrl(shot.thumbnail)" fit="cover" />
                             <el-image v-else-if="shot.scene_image_url" :src="getAssetUrl(shot.scene_image_url)" fit="cover" />
                             <el-image v-else-if="shot.reference_image_url" :src="getAssetUrl(shot.reference_image_url)" fit="cover" />
                             <div v-else class="thumb-placeholder-mini"><el-icon :size="16"><VideoPlay /></el-icon></div>
@@ -484,7 +484,7 @@
                           <!-- 左侧：大缩略图+操作按钮 -->
                           <div class="detail-left">
                             <div class="shot-detail-thumb">
-                              <el-image v-if="shot.thumbnail || shot.video_url || shot.result_url" :src="getAssetUrl(shot.thumbnail || shot.video_url || shot.result_url)" fit="cover" :preview-src-list="[getAssetUrl(shot.thumbnail || shot.video_url || shot.result_url)]" preview-teleported />
+                              <el-image v-if="shot.thumbnail" :src="getAssetUrl(shot.thumbnail)" fit="cover" :preview-src-list="[getAssetUrl(shot.thumbnail)]" preview-teleported />
                               <el-image v-else-if="shot.scene_image_url" :src="getAssetUrl(shot.scene_image_url)" fit="cover" :preview-src-list="[getAssetUrl(shot.scene_image_url)]" preview-teleported />
                               <el-image v-else-if="shot.reference_image_url" :src="getAssetUrl(shot.reference_image_url)" fit="cover" :preview-src-list="[getAssetUrl(shot.reference_image_url)]" preview-teleported />
                               <div v-else class="thumb-placeholder-enhanced"><el-icon :size="32"><VideoPlay /></el-icon><span>暂无预览</span></div>

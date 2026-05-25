@@ -1,6 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const sceneController = require('../controllers/sceneController');
+const sceneService = require('../services/sceneService');
+const shotService = require('../services/shotService');
+const aiService = require('../services/ai-service');
 
 router.get('/', sceneController.list);
 
@@ -11,8 +14,6 @@ router.put('/:id', sceneController.update);
 router.delete('/:id', sceneController.remove);
 
 router.post('/:id/generate-image', sceneController.generateImage);
-
-module.exports = router;
 
 // 重新生成单个shot的image_prompt
 router.post('/:sceneId/shots/:shotIndex/regenerate', async (req, res) => {
@@ -134,3 +135,5 @@ router.put('/:sceneId/shots/reorder', async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 });
+
+module.exports = router;
