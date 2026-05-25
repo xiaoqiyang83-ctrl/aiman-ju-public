@@ -87,6 +87,7 @@ async function update(req, res) {
       reference_image_url,
       trim_start,
       trim_end,
+      video_prompt,  // v7.1.7 新增
     } = req.body;
 
     const row = await shotService.updateShot({
@@ -106,6 +107,7 @@ async function update(req, res) {
       referenceImageUrl: reference_image_url,
       trimStart: trim_start,
       trimEnd: trim_end,
+      videoPrompt: video_prompt,  // v7.1.7 新增
     });
 
     if (!row) {

@@ -82,6 +82,7 @@ async function updateShot({
   trimStart,
   trimEnd,
   imagePrompt,  // v6.3 新增
+  videoPrompt,  // v7.1.7 新增
 }) {
   const updates = [];
   const values = [];
@@ -153,6 +154,11 @@ async function updateShot({
   if (imagePrompt !== undefined && imagePrompt !== null) {
     updates.push('image_prompt = $' + paramIndex++);
     values.push(imagePrompt);
+  }
+  // v7.1.7 新增: video_prompt 字段
+  if (videoPrompt !== undefined && videoPrompt !== null) {
+    updates.push('video_prompt = $' + paramIndex++);
+    values.push(videoPrompt);
   }
 
   if (updates.length === 0) {
