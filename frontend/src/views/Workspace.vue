@@ -463,7 +463,7 @@
                         
                         <!-- 展开详情区域 -->
                         <div v-if="expandedShotIds.includes(shot.id || `shot-${scene.id}-${idx}`)" class="shot-detail-panel">
-                          <!-- 大缩略图+操作按钮 -->
+                          <!-- 左侧：大缩略图+操作按钮 -->
                           <div class="detail-left">
                             <div class="shot-detail-thumb">
                               <el-image v-if="shot.thumbnail || shot.video_url || shot.result_url" :src="getAssetUrl(shot.thumbnail || shot.video_url || shot.result_url)" fit="cover" :preview-src-list="[getAssetUrl(shot.thumbnail || shot.video_url || shot.result_url)]" preview-teleported />
@@ -479,36 +479,102 @@
                               <el-upload action="#" :show-file-list="false" :auto-upload="false" :on-change="(file) => handleShotRefUpload(file, shot)" @click.stop>
                                 <el-button size="small" type="info"><el-icon><Upload /></el-icon>场景参考图</el-button>
                               </el-upload>
+                              <el-button v-if="shot.reference_image_url" size="small" type="danger" link @click.stop="shot.reference_image_url = ''; handleInlineSave(shot)">清除参考图</el-button>
                               <el-select :model-value="getShotImageSize(shot.id)" @update:model-value="(val) => setShotImageSize(shot.id, val)" size="small" style="width: 100px;">
                                 <el-option v-for="(item, key) in IMAGE_SIZE_MAP" :key="key" :label="item.label" :value="key" />
                               </el-select>
                             </div>
                           </div>
-                          <!-- 右侧详情信息 -->
+                          <!-- 右侧：可编辑字段 -->
                           <div class="detail-right">
-                            <!-- 结构化提示词 -->
-                            <div class="shot-prompt-section" v-if="getVisualPrompt(shot)">
-                              <div class="prompt-color-bar" v-if="getVisualPrompt(shot).color_palette"><span class="prompt-label">🎨</span><span class="prompt-text">{{ getVisualPrompt(shot).color_palette }}</span></div>
-                              <div class="prompt-line" v-if="getVisualPrompt(shot).lighting"><span class="prompt-label">💡</span><span class="prompt-text">{{ getVisualPrompt(shot).lighting }}</span></div>
-                              <div class="prompt-line" v-if="getVisualPrompt(shot).character_placement"><span class="prompt-label">🎭</span><span class="prompt-text">{{ getVisualPrompt(shot).character_placement }}</span></div>
-                              <div class="prompt-line" v-if="getVisualPrompt(shot).composition"><span class="prompt-label">📐</span><span class="prompt-text">{{ getVisualPrompt(shot).composition }}</span></div>
-                              <div class="prompt-line" v-if="getActionPrompt(shot)?.physical_action"><span class="prompt-label">🎬</span><span class="prompt-text">{{ getActionPrompt(shot).physical_action }}</span></div>
-                              <div class="prompt-line" v-if="getEmotionCue(shot)?.primary_emotion"><span class="prompt-label">{{ getEmotionEmoji(getEmotionCue(shot).primary_emotion) }}</span><span class="prompt-text">{{ getEmotionCue(shot).primary_emotion }}</span></div>
-                            </div>
-                            <p v-else class="shot-description">{{ shot.visual_description || shot.description || '暂无描述' }}</p>
-                            <!-- 完整台词/旁白 -->
-                            <div class="shot-dialogue-row" v-if="shot.dialogue || getNarration(shot)">
-                              <span v-if="shot.dialogue" class="shot-dialogue">💬 {{ shot.dialogue }}</span>
-                              <span v-if="getNarration(shot)" class="shot-narration">📖 {{ getNarration(shot) }}</span>
-                            </div>
-                            <!-- 运镜 -->
-                            <div class="shot-camera"><el-icon><Monitor /></el-icon><span>{{ shot.camera_movement || '固定镜头' }}</span></div>
-                            <!-- 操作按钮行 -->
-                            <div class="detail-bottom-actions">
-                              <el-button size="small" type="primary" link @click.stop="handleShotClick(shot)">编辑</el-button>
-                              <el-button size="small" link :disabled="idx === 0" @click.stop="handleMoveShot(scene, shot, 'up')"><el-icon><ArrowUp /></el-icon></el-button>
-                              <el-button size="small" link :disabled="idx === (scene.shots?.length || 0) - 1" @click.stop="handleMoveShot(scene, shot, 'down')"><el-icon><ArrowDown /></el-icon></el-button>
-                              <el-button v-if="shot.id" size="small" type="danger" link @click.stop="handleDeleteShot(shot, scene)">删除</el-button>
+                            <div class="detail-form">
+                              <!-- 第1行：编号+景别+运镜+时长 -->
+                              <div class="detail-form-row">
+                                <el-form-item label="编号" class="inline-field-sm">
+                                  <el-input :model-value="String(shot.shot_number ?? (idx+1))" disabled size="small" />
+                                </el-form-item>
+                                <el-form-item label="景别" class="inline-field">
+                                  <el-select v-model="shot.shot_type" placeholder="景别" size="small" @change="handleInlineSave(shot)">
+                                    <el-option label="全景" value="全景" />
+                                    <el-option label="中景" value="中景" />
+                                    <el-option label="近景" value="近景" />
+                                    <el-option label="特写" value="特写" />
+                                    <el-option label="大特写" value="大特写" />
+                                  </el-select>
+                                </el-form-item>
+                                <el-form-item label="运镜" class="inline-field">
+                                  <el-select v-model="shot.camera_movement" placeholder="运镜" size="small" @change="handleInlineSave(shot)">
+                                    <el-option label="固定" value="固定" />
+                                    <el-option label="推镜头" value="推镜头" />
+                                    <el-option label="拉镜头" value="拉镜头" />
+                                    <el-option label="摇镜头" value="摇镜头" />
+                                    <el-option label="移镜头" value="移镜头" />
+                                  </el-select>
+                                </el-form-item>
+                                <el-form-item label="时长" class="inline-field-sm">
+                                  <el-input-number v-model="shot.duration" :min="1" :max="60" size="small" @change="handleInlineSave(shot)" />
+                                </el-form-item>
+                              </div>
+                              
+                              <!-- 第2行：关联角色 -->
+                              <div class="detail-form-row">
+                                <el-form-item label="关联角色" class="inline-field">
+                                  <div class="char-select-inline">
+                                    <el-select v-model="shot.character_id" placeholder="选择角色" clearable size="small" @change="handleInlineSave(shot)">
+                                      <el-option v-for="char in characters" :key="char.id" :label="char.name" :value="char.id">
+                                        <div class="char-option"><el-avatar :size="20" :src="getAssetUrl(char.front_image_url || char.image_url || char.reference_image)" /><span style="margin-left: 6px">{{ char.name }}</span></div>
+                                      </el-option>
+                                    </el-select>
+                                    <el-select v-if="shot.character_id" v-model="shot.character_angle" placeholder="角度" size="small" style="width: 90px; margin-left: 8px" @change="handleInlineSave(shot)">
+                                      <el-option label="正面" value="front" />
+                                      <el-option label="侧面" value="side" />
+                                      <el-option label="背面" value="back" />
+                                    </el-select>
+                                  </div>
+                                </el-form-item>
+                                <div v-if="shot.character_id && shot.character_angle" class="char-ref-inline">
+                                  <img :src="getAssetUrl(getShotCharRef(shot))" alt="角色参考图" />
+                                </div>
+                              </div>
+                              
+                              <!-- 第3行：画面描述 -->
+                              <el-form-item label="画面描述" class="inline-field-full">
+                                <el-input v-model="shot.visual_description" type="textarea" :rows="2" placeholder="描述这个镜头的画面内容..." size="small" @blur="handleInlineSave(shot)" />
+                              </el-form-item>
+                              
+                              <!-- 第4行：台词/旁白 -->
+                              <el-form-item label="台词/旁白" class="inline-field-full">
+                                <el-input v-model="shot.dialogue" type="textarea" :rows="2" placeholder="角色台词或旁白内容..." size="small" @blur="handleInlineSave(shot)" />
+                              </el-form-item>
+                              
+                              <!-- 结构化提示词（只读展示） -->
+                              <div class="shot-prompt-section" v-if="getVisualPrompt(shot)">
+                                <div class="prompt-section-title">结构化提示词（AI生成，只读）</div>
+                                <div class="prompt-color-bar" v-if="getVisualPrompt(shot).color_palette"><span class="prompt-label">🎨</span><span class="prompt-text">{{ getVisualPrompt(shot).color_palette }}</span></div>
+                                <div class="prompt-line" v-if="getVisualPrompt(shot).lighting"><span class="prompt-label">💡</span><span class="prompt-text">{{ getVisualPrompt(shot).lighting }}</span></div>
+                                <div class="prompt-line" v-if="getVisualPrompt(shot).character_placement"><span class="prompt-label">🎭</span><span class="prompt-text">{{ getVisualPrompt(shot).character_placement }}</span></div>
+                                <div class="prompt-line" v-if="getVisualPrompt(shot).composition"><span class="prompt-label">📐</span><span class="prompt-text">{{ getVisualPrompt(shot).composition }}</span></div>
+                                <div class="prompt-line" v-if="getActionPrompt(shot)?.physical_action"><span class="prompt-label">🎬</span><span class="prompt-text">{{ getActionPrompt(shot).physical_action }}</span></div>
+                                <div class="prompt-line" v-if="getEmotionCue(shot)?.primary_emotion"><span class="prompt-label">{{ getEmotionEmoji(getEmotionCue(shot).primary_emotion) }}</span><span class="prompt-text">{{ getEmotionCue(shot).primary_emotion }}</span></div>
+                              </div>
+                              
+                              <!-- 配音信息 -->
+                              <div v-if="shot.audio_url" class="detail-voice-info">
+                                <el-tag size="small" type="success">已配音</el-tag>
+                                <el-button size="small" link type="primary" @click.stop="playAudioPreview(shot.audio_url)"><el-icon><VideoPlay /></el-icon>试听</el-button>
+                                <el-button v-if="shot.video_url" size="small" type="warning" :loading="shot.lip_sync_status === 'processing'" @click.stop="currentShot = shot; handleLipSync()">
+                                  <el-icon><ChatDotRound /></el-icon>
+                                  {{ shot.lip_sync_status === 'completed' ? '重新同步口型' : '口型同步' }}
+                                </el-button>
+                              </div>
+                              
+                              <!-- 操作按钮行 -->
+                              <div class="detail-bottom-actions">
+                                <el-button size="small" type="primary" :loading="regeneratingShot" @click.stop="currentShot = shot; currentScene = scene; handleRegenerateShot()">重新生成</el-button>
+                                <el-button size="small" link :disabled="idx === 0" @click.stop="handleMoveShot(scene, shot, 'up')"><el-icon><ArrowUp /></el-icon></el-button>
+                                <el-button size="small" link :disabled="idx === (scene.shots?.length || 0) - 1" @click.stop="handleMoveShot(scene, shot, 'down')"><el-icon><ArrowDown /></el-icon></el-button>
+                                <el-button v-if="shot.id" size="small" type="danger" link @click.stop="handleDeleteShot(shot, scene)">删除</el-button>
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -4149,6 +4215,35 @@ const handleShotRefUpload = (file, shot) => {
   })
 }
 
+// 行内编辑自动保存（防抖）
+let inlineSaveTimers = {}
+const handleInlineSave = async (shot, field) => {
+  if (!shot?.id) return
+  // 清除之前的定时器
+  if (inlineSaveTimers[shot.id]) {
+    clearTimeout(inlineSaveTimers[shot.id])
+  }
+  // 500ms防抖
+  inlineSaveTimers[shot.id] = setTimeout(async () => {
+    try {
+      await shotsAPI.update(shot.id, {
+        shot_type: shot.shot_type,
+        camera_movement: shot.camera_movement,
+        visual_description: shot.visual_description,
+        dialogue: shot.dialogue,
+        duration: shot.duration,
+        character_id: shot.character_id,
+        character_angle: shot.character_angle,
+        reference_image_url: shot.reference_image_url
+      })
+      ElMessage.success('已保存')
+    } catch (err) {
+      console.error('行内保存失败:', err)
+      ElMessage.error('保存失败')
+    }
+  }, 500)
+}
+
 const handleSaveShot = async () => {
   if (!currentShot.value) return
   
@@ -6345,6 +6440,85 @@ const handleMoveShot = async (scene, shot, direction) => {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+/* 行内编辑表单 */
+.detail-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.detail-form-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.detail-form .el-form-item {
+  margin-bottom: 0;
+}
+
+.detail-form .el-form-item__label {
+  font-size: 12px;
+  padding-bottom: 2px;
+  line-height: 1.4;
+}
+
+.inline-field-sm {
+  width: 80px;
+  flex-shrink: 0;
+}
+
+.inline-field {
+  width: 140px;
+  flex-shrink: 0;
+}
+
+.inline-field-full {
+  width: 100%;
+}
+
+.char-select-inline {
+  display: flex;
+  align-items: center;
+}
+
+.char-ref-inline {
+  width: 40px;
+  height: 40px;
+  border-radius: 4px;
+  overflow: hidden;
+  flex-shrink: 0;
+  align-self: flex-end;
+  margin-bottom: 2px;
+}
+
+.char-ref-inline img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.char-option {
+  display: flex;
+  align-items: center;
+}
+
+.prompt-section-title {
+  font-size: 11px;
+  color: #909399;
+  margin-bottom: 4px;
+  border-top: 1px solid #f0f2f5;
+  padding-top: 6px;
+}
+
+.detail-voice-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
 }
 
 .detail-bottom-actions {
