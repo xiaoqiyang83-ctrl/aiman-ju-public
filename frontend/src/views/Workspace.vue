@@ -395,9 +395,15 @@
                         <el-icon><Picture /></el-icon>
                         场景图
                       </el-button>
-                      <el-button size="small" type="primary" @click="handleGenerateSceneVideo(scene)" title="批量生成该场景下所有镜头的视频">
-                        <el-icon><VideoPlay /></el-icon>
-                        生成视频
+                      <el-checkbox 
+                        v-model="sceneAllSelected[scene.id]" 
+                        @change="(val) => toggleSceneAllShots(scene, val)"
+                        size="small"
+                        title="全选/取消全选该场景所有镜头"
+                      >全选</el-checkbox>
+                      <el-button size="small" type="success" :loading="batchGenerating" :disabled="!sceneSelectedShots[scene.id]?.length" @click.stop="handleBatchGenImagesForScene(scene)" title="批量生成选中镜头的图片">
+                        <el-icon><Picture /></el-icon>
+                        生图({{ sceneSelectedShots[scene.id]?.length || 0 }})
                       </el-button>
                       <el-button size="small" @click="handleEditScene(scene)" title="编辑场景信息（标题、地点、时间等）">
                         <el-icon><Edit /></el-icon>
@@ -412,6 +418,11 @@
                   
                   <!-- 镜头卡片网格（折叠显示，点击展开） -->
                   <div v-if="expandedSceneIds.includes(scene.id)" class="scene-body">
+                    <!-- 原剧本内容 -->
+                    <div v-if="scene.content" class="scene-script-preview">
+                      <div class="scene-script-label">原剧本</div>
+                      <div class="scene-script-text">{{ scene.content }}</div>
+                    </div>
                     <div v-if="!scene.shots?.length" class="scene-empty-shots-hint">
                       该场景暂无镜头，点击「添加镜头」新建，或通过剧本重新生成分镜。
                     </div>
@@ -436,6 +447,14 @@
                         
                         <!-- 折叠行：点击展开/折叠 -->
                         <div class="shot-summary" @click="toggleShotExpand(shot.id || `shot-${scene.id}-${idx}`)">
+                          <!-- 选中复选框 -->
+                          <el-checkbox 
+                            :model-value="sceneSelectedShots[scene.id]?.includes(shot.id)"
+                            @change="(val) => toggleShotSelect(scene, shot, val)"
+                            @click.stop
+                            size="small"
+                            class="shot-select-check"
+                          />
                           <!-- 小缩略图 -->
                           <div class="shot-mini-thumb">
                             <el-image v-if="shot.thumbnail || shot.video_url || shot.result_url" :src="getAssetUrl(shot.thumbnail || shot.video_url || shot.result_url)" fit="cover" />
@@ -2306,6 +2325,72 @@ const toggleShotExpand = (shotId) => {
   } else {
     expandedShotIds.value.splice(idx, 1)
   }
+}
+
+// ==================== v7.1.7 场景级镜头多选 ====================
+const sceneSelectedShots = ref({}) // { sceneId: [shotId, ...] }
+const sceneAllSelected = ref({}) // { sceneId: boolean }
+
+const toggleShotSelect = (scene, shot, val) => {
+  if (!sceneSelectedShots.value[scene.id]) {
+    sceneSelectedShots.value[scene.id] = []
+  }
+  const list = sceneSelectedShots.value[scene.id]
+  if (val) {
+    if (!list.includes(shot.id)) list.push(shot.id)
+  } else {
+    const idx = list.indexOf(shot.id)
+    if (idx !== -1) list.splice(idx, 1)
+  }
+  // 更新全选状态
+  sceneAllSelected.value[scene.id] = scene.shots?.length > 0 && list.length === scene.shots.length
+}
+
+const toggleSceneAllShots = (scene, val) => {
+  if (val) {
+    sceneSelectedShots.value[scene.id] = scene.shots?.map(s => s.id).filter(Boolean) || []
+  } else {
+    sceneSelectedShots.value[scene.id] = []
+  }
+}
+
+// 场景级批量生图
+const handleBatchGenImagesForScene = async (scene) => {
+  const selectedIds = sceneSelectedShots.value[scene.id] || []
+  if (!selectedIds.length) {
+    ElMessage.info('请先选择要生图的镜头')
+    return
+  }
+  const shotsToGenerate = scene.shots?.filter(s => selectedIds.includes(s.id) && !s.scene_image_url && (s.image_prompt || s.visual_prompt)) || []
+  if (!shotsToGenerate.length) {
+    ElMessage.info('选中的镜头都已生成图片或缺少提示词')
+    return
+  }
+  batchGenerating.value = true
+  batchCancelled.value = false
+  batchProgress.value = { current: 0, total: shotsToGenerate.length }
+  ElMessage.info(`开始批量生图，共 ${shotsToGenerate.length} 个镜头`)
+  
+  for (const shot of shotsToGenerate) {
+    if (batchCancelled.value) break
+    try {
+      generatingShotImage[shot.id] = true
+      const visualContinuityPrompt = await getVisualContinuityPrompt(shot)
+      const response = await imagesAPI.generateShot(shot.id, { visualContinuityPrompt, size: IMAGE_SIZE_MAP[getShotImageSize(shot.id)]?.value || '1344x768' })
+      if (response.success && response.imageUrl) {
+        shot.scene_image_url = response.imageUrl
+      }
+      batchProgress.value.current++
+    } catch (err) {
+      console.error('批量生图失败:', shot.shot_number, err)
+    } finally {
+      generatingShotImage[shot.id] = false
+    }
+  }
+  
+  batchGenerating.value = false
+  ElMessage.success('批量生图完成')
+  await loadScenes(true)
 }
 
 // ==================== v6.3 分镜拖拽排序 ====================
@@ -6526,6 +6611,71 @@ const handleMoveShot = async (scene, shot, direction) => {
   gap: 8px;
   padding-top: 8px;
   border-top: 1px solid #f0f2f5;
+}
+
+/* 场景原剧本预览 */
+.scene-script-preview {
+  margin: 8px 20px 0;
+  padding: 10px 14px;
+  background: #f8f9fb;
+  border-radius: 8px;
+  border-left: 3px solid #667eea;
+}
+.scene-script-label {
+  font-size: 11px;
+  color: #909399;
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+.scene-script-text {
+  font-size: 12px;
+  color: #606266;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+/* 镜头选中复选框 */
+.shot-select-check {
+  margin-right: 4px;
+}
+.shot-select-check .el-checkbox__inner {
+  width: 14px;
+  height: 14px;
+}
+
+/* 场景头部全选复选框样式 */
+.scene-actions-enhanced .el-checkbox {
+  color: #fff;
+  margin-right: 8px;
+}
+.scene-actions-enhanced .el-checkbox__label {
+  color: rgba(255,255,255,0.85);
+  font-size: 12px;
+}
+.scene-actions-enhanced .el-checkbox__inner {
+  background: rgba(255,255,255,0.2);
+  border-color: rgba(255,255,255,0.4);
+}
+
+/* 展开面板字体缩小协调 */
+.shot-detail-panel {
+  font-size: 12px;
+}
+.shot-detail-panel .el-form-item__label {
+  font-size: 11px !important;
+}
+.shot-detail-panel .el-input__inner,
+.shot-detail-panel .el-textarea__inner {
+  font-size: 12px;
+}
+.shot-detail-panel .el-select .el-input__inner {
+  font-size: 12px;
+}
+.shot-detail-panel .el-button--small {
+  font-size: 11px;
+  padding: 5px 10px;
 }
 
 .add-shot-row {
