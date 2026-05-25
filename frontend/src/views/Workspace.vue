@@ -675,6 +675,7 @@
                 <el-button size="small" @click="exportResultUrl = ''">关闭</el-button>
               </div>
               <div v-loading="loadingVideos" class="video-list">
+                <!--【已注释-旧el-table布局】
                 <el-table
                   :data="videoList"
                   stripe
@@ -754,7 +755,177 @@
                     </template>
                   </el-table-column>
                 </el-table>
-                <div v-if="!loadingVideos && videoList.length === 0" class="empty-state">
+                【已注释-旧el-table布局】-->
+
+                <!--【新布局】视频场景分组行布局 -->
+                <div 
+                  v-for="scene in scenes" 
+                  :key="'vscene-' + scene.id"
+                  class="video-scene-card"
+                >
+                  <!-- 场景头 -->
+                  <div class="video-scene-header" @click="toggleVideoSceneExpand(scene)">
+                    <div class="video-scene-badge">
+                      <span class="video-scene-number">场景 {{ scene.scene_number || 1 }}</span>
+                    </div>
+                    <div class="video-scene-title-row">
+                      <h3 class="video-scene-title">{{ scene.title || '未命名场景' }}</h3>
+                      <div class="video-scene-meta">
+                        <el-tag size="small" type="warning">{{ scene.shots?.length || 0 }} 个镜头</el-tag>
+                        <el-tag size="small" :type="getSceneVideoProgressType(scene)">{{ getSceneVideoProgressText(scene) }}</el-tag>
+                      </div>
+                    </div>
+                    <el-icon class="video-scene-expand-icon" :class="{ expanded: expandedVideoSceneIds.includes(scene.id) }">
+                      <ArrowDown />
+                    </el-icon>
+                    <div class="video-scene-actions" @click.stop>
+                      <el-checkbox 
+                        :model-value="videoSceneAllSelected(scene)" 
+                        @change="toggleVideoSceneAllShots(scene)"
+                        size="small"
+                      >全选</el-checkbox>
+                      <el-button 
+                        size="small" 
+                        type="primary" 
+                        :disabled="!(videoSceneSelectedShots[scene.id]?.length)"
+                        @click="handleBatchGenerateVideoForScene(scene)"
+                      >
+                        <el-icon><VideoPlay /></el-icon>
+                        批量生成
+                      </el-button>
+                    </div>
+                  </div>
+
+                  <!-- 镜头行列表 -->
+                  <div v-if="expandedVideoSceneIds.includes(scene.id)" class="video-scene-body">
+                    <div v-if="!scene.shots?.length" class="scene-empty-shots-hint">
+                      该场景暂无镜头数据
+                    </div>
+                    <div class="shots-table video-shots-table">
+                      <!-- 表头 -->
+                      <div class="shots-table-header">
+                        <div class="th th-check"></div>
+                        <div class="th th-thumb">预览</div>
+                        <div class="th th-num">#</div>
+                        <div class="th th-shot-type">景别</div>
+                        <div class="th th-camera">运镜</div>
+                        <div class="th th-duration">时长</div>
+                        <div class="th th-dialogue">台词/旁白</div>
+                        <div class="th th-desc">画面描述</div>
+                        <div class="th th-img-status">图片</div>
+                        <div class="th th-video-status">视频</div>
+                        <div class="th th-actions">操作</div>
+                      </div>
+                      <!-- 镜头行 -->
+                      <div 
+                        v-for="(shot, idx) in scene.shots" 
+                        :key="'vshot-' + shot.id"
+                        class="shot-table-row video-shot-row"
+                        :class="{ 
+                          completed: shot.video_status === 'completed', 
+                          generating: shot.video_status === 'generating' || shot.video_status === 'processing',
+                          selected: (videoSceneSelectedShots[scene.id] || []).includes(shot.id)
+                        }"
+                      >
+                        <!-- 复选框 -->
+                        <div class="td td-check">
+                          <el-checkbox 
+                            :model-value="(videoSceneSelectedShots[scene.id] || []).includes(shot.id)"
+                            @change="toggleVideoShotSelect(scene.id, shot.id)"
+                            size="small"
+                          />
+                        </div>
+                        <!-- 缩略图 -->
+                        <div class="td td-thumb" @click="handleShotClick(shot)">
+                          <el-image v-if="shot.thumbnail || shot.video_url || shot.result_url" 
+                            :src="getAssetUrl(shot.thumbnail || shot.video_url || shot.result_url)" 
+                            fit="cover" 
+                            :preview-src-list="[getAssetUrl(shot.thumbnail || shot.video_url || shot.result_url)]" 
+                            preview-teleported 
+                            class="shot-thumb-img" />
+                          <el-image v-else-if="shot.scene_image_url" 
+                            :src="getAssetUrl(shot.scene_image_url)" 
+                            fit="cover" 
+                            :preview-src-list="[getAssetUrl(shot.scene_image_url)]" 
+                            preview-teleported 
+                            class="shot-thumb-img" />
+                          <div v-else class="thumb-placeholder-small">
+                            <el-icon :size="20"><VideoPlay /></el-icon>
+                          </div>
+                        </div>
+                        <!-- 镜号 -->
+                        <div class="td td-num">{{ shot.shot_number ?? (idx + 1) }}</div>
+                        <!-- 景别 -->
+                        <div class="td td-shot-type">
+                          <el-select v-model="shot.shot_type" size="small" placeholder="景别" @change="handleInlineSave(shot)">
+                            <el-option label="全景" value="全景" />
+                            <el-option label="中景" value="中景" />
+                            <el-option label="近景" value="近景" />
+                            <el-option label="特写" value="特写" />
+                            <el-option label="大特写" value="大特写" />
+                          </el-select>
+                        </div>
+                        <!-- 运镜 -->
+                        <div class="td td-camera">
+                          <el-select v-model="shot.camera_movement" size="small" placeholder="运镜" @change="handleInlineSave(shot)">
+                            <el-option label="固定" value="固定" />
+                            <el-option label="推镜头" value="推镜头" />
+                            <el-option label="拉镜头" value="拉镜头" />
+                            <el-option label="摇镜头" value="摇镜头" />
+                            <el-option label="移镜头" value="移镜头" />
+                          </el-select>
+                        </div>
+                        <!-- 时长 -->
+                        <div class="td td-duration">
+                          <el-input-number v-model="shot.duration" :min="1" :max="300" size="small" controls-position="right" @change="handleInlineSave(shot)" />
+                          <span class="duration-unit">秒</span>
+                        </div>
+                        <!-- 台词/旁白 -->
+                        <div class="td td-dialogue">
+                          <span class="video-cell-text">{{ shot.dialogue || '—' }}</span>
+                        </div>
+                        <!-- 画面描述 -->
+                        <div class="td td-desc">
+                          <span class="video-cell-text">{{ shot.visual_description || shot.description || '—' }}</span>
+                        </div>
+                        <!-- 图片状态 -->
+                        <div class="td td-img-status">
+                          <el-tag v-if="shot.scene_image_url" type="success" size="small">有</el-tag>
+                          <el-tag v-else type="info" size="small">无</el-tag>
+                        </div>
+                        <!-- 视频状态 -->
+                        <div class="td td-video-status">
+                          <el-tag :type="getVideoStatusType(shot.video_status)" size="small">
+                            {{ getVideoStatusText(shot.video_status) }}
+                          </el-tag>
+                        </div>
+                        <!-- 操作 -->
+                        <div class="td td-actions">
+                          <el-button size="small" @click.stop="handleGenerateSingle(shot)" title="生成视频">
+                            <el-icon><VideoPlay /></el-icon>
+                          </el-button>
+                          <el-button v-if="shot.video_status === 'completed'" size="small" type="success" @click.stop="handlePreviewVideo(shot)" title="预览">
+                            <el-icon><View /></el-icon>
+                          </el-button>
+                          <el-button v-if="shot.video_status === 'completed'" size="small" type="info" @click.stop="handleTrimVideo(shot)" title="裁剪">
+                            <el-icon><Edit /></el-icon>
+                          </el-button>
+                          <el-button v-if="shot.video_status === 'completed'" size="small" type="warning" @click.stop="handleRegenerate(shot)" title="重新生成">
+                            <el-icon><Refresh /></el-icon>
+                          </el-button>
+                          <el-button v-if="shot.video_status === 'completed' && shot.result_url" size="small" type="primary" @click.stop="handleDownloadVideo(shot)" title="下载">
+                            <el-icon><Download /></el-icon>
+                          </el-button>
+                          <el-button v-if="shot.id" size="small" type="danger" link @click.stop="handleDeleteShot(shot, scene)" title="删除">
+                            <el-icon><Delete /></el-icon>
+                          </el-button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div v-if="!loadingVideos && scenes.length === 0" class="empty-state">
                   <el-empty description="暂无镜头数据" />
                 </div>
               </div>
@@ -2446,6 +2617,71 @@ const videoListKey = ref('')
 const selectedVideos = ref([])
 const previewVideoUrl = ref('')
 const exportResultUrl = ref('')
+
+// ==================== 视频Tab场景分组行布局 ====================
+const expandedVideoSceneIds = ref([])
+const videoSceneSelectedShots = ref({})
+const toggleVideoSceneExpand = (scene) => {
+  const idx = expandedVideoSceneIds.value.indexOf(scene.id)
+  if (idx === -1) expandedVideoSceneIds.value.push(scene.id)
+  else expandedVideoSceneIds.value.splice(idx, 1)
+}
+const videoSceneAllSelected = (scene) => {
+  const selected = videoSceneSelectedShots.value[scene.id] || []
+  return scene.shots?.length > 0 && selected.length === scene.shots.length
+}
+const toggleVideoShotSelect = (sceneId, shotId) => {
+  if (!videoSceneSelectedShots.value[sceneId]) videoSceneSelectedShots.value[sceneId] = []
+  const arr = videoSceneSelectedShots.value[sceneId]
+  const idx = arr.indexOf(shotId)
+  if (idx === -1) arr.push(shotId)
+  else arr.splice(idx, 1)
+  syncVideoSelectedShotIds()
+}
+const toggleVideoSceneAllShots = (scene) => {
+  const current = videoSceneSelectedShots.value[scene.id] || []
+  if (current.length === scene.shots?.length) {
+    videoSceneSelectedShots.value[scene.id] = []
+  } else {
+    videoSceneSelectedShots.value[scene.id] = scene.shots?.map(s => s.id) || []
+  }
+  syncVideoSelectedShotIds()
+}
+const syncVideoSelectedShotIds = () => {
+  const all = []
+  for (const sceneId in videoSceneSelectedShots.value) {
+    all.push(...videoSceneSelectedShots.value[sceneId])
+  }
+  selectedShotIds.value = [...new Set(all)]
+}
+const getSceneVideoProgressText = (scene) => {
+  const shots = scene.shots || []
+  const completed = shots.filter(s => s.video_status === 'completed').length
+  return `${completed}/${shots.length} 已完成`
+}
+const getSceneVideoProgressType = (scene) => {
+  const shots = scene.shots || []
+  if (!shots.length) return 'info'
+  const completed = shots.filter(s => s.video_status === 'completed').length
+  if (completed === shots.length) return 'success'
+  if (completed > 0) return 'warning'
+  return 'info'
+}
+const handleBatchGenerateVideoForScene = async (scene) => {
+  const selectedIds = videoSceneSelectedShots.value[scene.id] || []
+  if (!selectedIds.length) {
+    ElMessage.info('请先选择要生成视频的镜头')
+    return
+  }
+  const targetShots = (scene.shots || []).filter(s => selectedIds.includes(s.id) && s.video_status !== 'completed')
+  if (!targetShots.length) {
+    ElMessage.info('选中的镜头都已生成完成')
+    return
+  }
+  for (const shot of targetShots) {
+    await handleGenerateSingle(shot)
+  }
+}
 
 // ==================== 视频裁剪相关 ====================
 const showTrimDialog = ref(false)
@@ -6267,6 +6503,110 @@ const handleMoveShot = async (scene, shot, direction) => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 视频Tab场景分组行布局 */
+.video-scene-card {
+  background: #1e1e1e;
+  border-radius: 8px;
+  margin: 12px;
+  overflow: hidden;
+}
+.video-scene-header {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  background: #2d2d2d;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.video-scene-header:hover {
+  background: #333;
+}
+.video-scene-badge {
+  margin-right: 12px;
+}
+.video-scene-number {
+  font-weight: 600;
+  color: #409eff;
+  font-size: 13px;
+}
+.video-scene-title-row {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.video-scene-title {
+  font-size: 14px;
+  color: #e0e0e0;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.video-scene-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.video-scene-expand-icon {
+  color: #909399;
+  transition: transform 0.3s;
+  margin: 0 12px;
+}
+.video-scene-expand-icon.expanded {
+  transform: rotate(180deg);
+}
+.video-scene-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.video-scene-body {
+  padding: 0;
+}
+.video-shots-table {
+  margin: 0;
+  border-radius: 0;
+}
+.th-check, .td.td-check {
+  width: 40px;
+  min-width: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.th-img-status, .td.td-img-status {
+  width: 60px;
+  min-width: 60px;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.th-video-status, .td.td-video-status {
+  width: 80px;
+  min-width: 80px;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.video-shot-row.selected {
+  background: #2a3a4a;
+}
+.video-cell-text {
+  font-size: 12px;
+  color: #bbb;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.4;
 }
 
 /* 添加镜头卡片 */
