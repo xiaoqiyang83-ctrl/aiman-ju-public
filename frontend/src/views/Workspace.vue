@@ -6569,6 +6569,216 @@ const handleMoveShot = async (scene, shot, direction) => {
 .video-scene-body {
   padding: 0;
 }
+/* 表格式行布局基础样式（分镜+视频共用） */
+.shots-table {
+  background: #1e1e1e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 12px;
+}
+.shots-table-header {
+  display: flex;
+  align-items: center;
+  padding: 10px 12px;
+  background: #2d2d2d;
+  border-bottom: 1px solid #404040;
+  font-size: 12px;
+  font-weight: 600;
+  color: #a0a0a0;
+}
+.shot-table-row {
+  display: flex;
+  align-items: center;
+  padding: 10px 12px;
+  border-bottom: 1px solid #333;
+  background: #252525;
+  transition: background-color 0.2s;
+}
+.shot-table-row:hover {
+  background: #2a2a2a;
+}
+.shot-table-row.completed {
+  border-left: 3px solid #67c23a;
+}
+.shot-table-row.generating {
+  border-left: 3px solid #e6a23c;
+  animation: row-pulse 2s infinite;
+}
+@keyframes row-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.85; }
+}
+.shot-table-row:last-of-type {
+  border-bottom: none;
+}
+/* 表格列宽 */
+.th, .td {
+  padding: 0 8px;
+  box-sizing: border-box;
+}
+.th-thumb, .td.td-thumb {
+  width: 90px;
+  min-width: 90px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+}
+.th-num, .td.td-num {
+  width: 40px;
+  min-width: 40px;
+  text-align: center;
+  font-weight: 600;
+  color: #409eff;
+}
+.th-shot-type, .td.td-shot-type {
+  width: 100px;
+  min-width: 100px;
+}
+.th-camera, .td.td-camera {
+  width: 100px;
+  min-width: 100px;
+}
+.th-duration, .td.td-duration {
+  width: 110px;
+  min-width: 110px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.duration-unit {
+  font-size: 12px;
+  color: #888;
+}
+.th-dialogue, .td.td-dialogue {
+  flex: 1;
+  min-width: 120px;
+}
+.th-desc, .td.td-desc {
+  flex: 2;
+  min-width: 160px;
+}
+.th-actions, .td.td-actions {
+  width: 180px;
+  min-width: 180px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  justify-content: center;
+}
+/* 缩略图样式 */
+.shot-thumb-img {
+  width: 80px;
+  height: 60px;
+  border-radius: 4px;
+  object-fit: cover;
+}
+.thumb-placeholder-small {
+  width: 80px;
+  height: 60px;
+  border-radius: 4px;
+  background: #333;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #666;
+}
+.shot-status-badge {
+  margin-top: 4px;
+  font-size: 10px;
+}
+/* 内联编辑字段 */
+.inline-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.inline-fields .el-input,
+.inline-fields .el-textarea {
+  width: 100%;
+}
+.inline-fields .el-input .el-input__inner,
+.inline-fields .el-textarea .el-textarea__inner {
+  background: #333;
+  border-color: #444;
+  color: #ddd;
+  font-size: 12px;
+  height: 28px;
+}
+.inline-fields .el-textarea .el-textarea__inner {
+  height: auto;
+  min-height: 24px;
+  resize: none;
+}
+.inline-fields .el-input:hover .el-input__inner,
+.inline-fields .el-textarea:hover .el-textarea__inner {
+  border-color: #409eff;
+}
+.inline-fields .el-input.is-focus .el-input__inner,
+.inline-fields .el-textarea.is-focus .el-textarea__inner {
+  border-color: #409eff;
+  background: #383838;
+}
+/* 台词输入框 */
+.td-dialogue .el-textarea__inner {
+  background: #333 !important;
+  border-color: #444 !important;
+  color: #ddd;
+  font-size: 12px;
+  resize: none;
+}
+.td-dialogue .el-textarea__inner:focus {
+  border-color: #409eff !important;
+  background: #383838 !important;
+}
+/* 下拉框样式 */
+.td-shot-type .el-select,
+.td-camera .el-select {
+  width: 100%;
+}
+.td-shot-type .el-select .el-input__wrapper,
+.td-camera .el-select .el-input__wrapper {
+  background: #333;
+  border-color: #444;
+  box-shadow: none;
+}
+.td-shot-type .el-select .el-input__inner,
+.td-camera .el-select .el-input__inner {
+  color: #ddd;
+  font-size: 12px;
+}
+.td-shot-type .el-select:hover .el-input__wrapper,
+.td-camera .el-select:hover .el-input__wrapper {
+  border-color: #409eff;
+}
+/* 数字输入框样式 */
+.td-duration .el-input-number {
+  width: 80px;
+}
+.td-duration .el-input-number .el-input__wrapper {
+  background: #333;
+  border-color: #444;
+  padding: 0 24px 0 8px;
+}
+.td-duration .el-input-number .el-input__inner {
+  color: #ddd;
+  font-size: 12px;
+}
+.td-duration .el-input-number .el-input-number__decrease,
+.td-duration .el-input-number .el-input-number__increase {
+  background: #404040;
+  border-color: #555;
+  color: #aaa;
+}
+.td-duration .el-input-number .el-input-number__decrease:hover,
+.td-duration .el-input-number .el-input-number__increase:hover {
+  color: #409eff;
+}
+/* 添加镜头按钮 */
+.shots-table-add {
+  padding: 12px;
+  display: flex;
+}
 .video-shots-table {
   margin: 0;
   border-radius: 0;
