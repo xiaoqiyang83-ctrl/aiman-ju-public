@@ -1088,9 +1088,12 @@
                                 <el-input v-model="shot.video_prompt" type="textarea" :rows="2" placeholder="视频生成描述，留空则使用AI组合提示词" size="small" @blur="handleInlineSave(shot)" />
                               </el-form-item>
                               
-                              <!-- 只读预览：video_prompt为空时显示组合提示词 -->
+                              <!-- 预览：video_prompt为空时显示后端实际会用的提示词 -->
                               <div v-if="!shot.video_prompt && getVideoPromptPreview(shot)" class="video-prompt-preview">
-                                <div class="prompt-preview-label">💡 AI组合提示词预览（留空时使用）</div>
+                                <div class="prompt-preview-label">
+                                  💡 视频生成将使用以下提示词（点击"填入"可编辑后重新生成）
+                                  <el-button size="small" link type="primary" @click.stop="shot.video_prompt = getVideoPromptPreview(shot); handleInlineSave(shot)">填入编辑</el-button>
+                                </div>
                                 <div class="prompt-preview-content">{{ getVideoPromptPreview(shot) }}</div>
                               </div>
                               
@@ -5494,41 +5497,40 @@ const getEmotionEmoji = (emotion) => {
 }
 
 // ==================== v7.1.7 视频提示词预览 ====================
-// 组合视频生成提示词（用于video_prompt为空时的预览）
+// 与后端 generateShotVideo 的 prompt 优先级一致：
+// shot.video_prompt || shot.visual_prompt || shot.visual_description || shot.action_description
+// 当 video_prompt 为空时，模拟后端 fallback 并丰富为最佳视频prompt结构
 const getVideoPromptPreview = (shot) => {
-  const parts = [];
-  
-  // 景别
-  if (shot.shot_type) {
-    parts.push(shot.shot_type);
+  // 后端优先级2: visual_prompt（结构化JSON的原始文本）
+  if (shot.visual_prompt) {
+    // visual_prompt 是JSON字符串，需要组合各子字段为可读描述
+    const parts = []
+    // 场景描述
+    const vp = getVisualPrompt(shot)
+    if (vp) {
+      if (vp.scene_description) parts.push(vp.scene_description)
+      if (vp.character_placement) parts.push(vp.character_placement)
+    }
+    // 动作描述
+    const ap = getActionPrompt(shot)
+    if (ap?.physical_action) parts.push(ap.physical_action)
+    // 视觉控制
+    if (vp) {
+      if (vp.lighting) parts.push(vp.lighting)
+      if (vp.composition) parts.push(vp.composition)
+      if (vp.color_palette) parts.push(vp.color_palette)
+    }
+    return parts.length > 0 ? parts.join(', ') : shot.visual_prompt
   }
-  
-  // 运镜
-  if (shot.camera_movement && shot.camera_movement !== '固定' && shot.camera_movement !== '固定镜头') {
-    parts.push(shot.camera_movement);
-  }
-  
-  // 画面描述
+  // 后端优先级3: visual_description
   if (shot.visual_description) {
-    parts.push(shot.visual_description);
+    return shot.visual_description
   }
-  
-  // 结构化提示词
-  const visualPrompt = getVisualPrompt(shot);
-  if (visualPrompt) {
-    if (visualPrompt.lighting) parts.push(visualPrompt.lighting);
-    if (visualPrompt.color_palette) parts.push(visualPrompt.color_palette);
-    if (visualPrompt.composition) parts.push(visualPrompt.composition);
-    if (visualPrompt.character_placement) parts.push(visualPrompt.character_placement);
+  // 后端优先级4: action_description
+  if (shot.action_description) {
+    return shot.action_description
   }
-  
-  // 动作提示词
-  const actionPrompt = getActionPrompt(shot);
-  if (actionPrompt?.physical_action) {
-    parts.push(actionPrompt.physical_action);
-  }
-  
-  return parts.length > 0 ? parts.join(', ') : '';
+  return ''
 }
 
 const handleGenerateSceneVideo = async (scene) => {
