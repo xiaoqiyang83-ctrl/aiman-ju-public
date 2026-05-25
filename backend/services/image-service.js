@@ -130,7 +130,7 @@ async function downloadImage(url, localPath) {
  * @param {string} [params.quality] - 质量 standard/hd (仅cogview-4支持)
  * @returns {Promise<Object>} { url: 远程URL, localPath: 本地路径 }
  */
-async function generateImage({ prompt, model = DEFAULT_MODEL, size = DEFAULT_SIZE, quality }) {
+async function generateImage({ prompt, model = DEFAULT_MODEL, size = DEFAULT_SIZE, quality, seed }) {
   const config = COGVIEW_MODELS[model] || COGVIEW_MODELS[DEFAULT_MODEL];
   
   // 构建请求体
@@ -143,6 +143,11 @@ async function generateImage({ prompt, model = DEFAULT_MODEL, size = DEFAULT_SIZ
   // 只有 cogview-4 支持 quality 参数
   if (quality && config.quality) {
     requestBody.quality = quality;
+  }
+
+  // seed参数保证生成一致性（智谱API支持）
+  if (seed !== undefined && seed !== null) {
+    requestBody.seed = seed;
   }
 
   console.log('[ImageService] 开始生成图片, model=' + model + ', size=' + size);
@@ -245,90 +250,48 @@ async function generateCharacterImage(characterId, variationId = null, options =
     visualPrompt = customPrompt;
   }
 
-  // 方案A：生成单张character sheet图，然后裁切为三视图
+  // ========== v5.1 优化：直接单独生成三视图（不再依赖sharp裁切） ==========
+  // 好处：1. 不依赖sharp库  2. 每张图用同一种子保证角色一致性  3. 生成质量更可控
   const results = {};
   const timestamp = Date.now();
+  const consistencySeed = Math.floor(Math.random() * 1000000); // 同一角色三张图用同一种子
   
-  try {
-    console.log('[ImageService] 开始生成角色设定图(character sheet)...');
-    
-    // 获取风格后缀
-    const styleSuffix = STYLE_MAP[style] || STYLE_MAP.anime;
-    const sheetPrompt = `Character sheet of ${visualPrompt}, three views, front view, side view, back view, full body, same character, consistent design, flat color, clean lines, white background, ${styleSuffix}, masterpiece, best quality`;
-    
-    // 使用16:9宽幅比例，适合三视图并排布局
-    const result = await generateImage({ prompt: sheetPrompt, size: '1344x768' });
-    
-    // 下载完整设定图
-    const sheetFilename = `char-${characterId}-sheet-${variationId || 'base'}-${timestamp}.png`;
-    const sheetLocalPath = path.join(__dirname, '../uploads/images', sheetFilename);
-    await downloadImage(result.url, sheetLocalPath);
-    console.log('[ImageService] 角色设定图生成成功，开始裁切...');
-    
-    // 裁切为三视图（三等分）
-    const sharp = require('sharp');
-    const image = sharp(sheetLocalPath);
-    const metadata = await image.metadata();
-    const width = metadata.width;
-    const height = metadata.height;
-    
-    if (!width || !height) {
-      throw new Error('无法读取设定图尺寸，裁切失败');
-    }
-    
-    const sliceWidth = Math.floor(width / 3);
-    
-    const views = [
-      { key: 'front', offset: 0 },
-      { key: 'side', offset: sliceWidth },
-      { key: 'back', offset: sliceWidth * 2 }
-    ];
-    
-    for (const view of views) {
-      try {
-        const viewFilename = `char-${characterId}-${view.key}-${variationId || 'base'}-${timestamp}.png`;
-        const viewLocalPath = path.join(__dirname, '../uploads/images', viewFilename);
-        const viewRelativePath = '/uploads/images/' + viewFilename;
-        
-        await image
-          .clone()
-          .extract({ left: view.offset, top: 0, width: sliceWidth, height: height })
-          .toFile(viewLocalPath);
-        
-        results[view.key] = viewRelativePath;
-        console.log(`[ImageService] ${view.key}视图裁切成功: ${viewRelativePath}`);
-      } catch (cropErr) {
-        console.error(`[ImageService] 裁切${view.key}视图失败:`, cropErr.message);
-      }
-    }
-    
-  } catch (err) {
-    console.error('[ImageService] 角色设定图生成失败，回退到单独生成:', err.message);
-    
-    // 回退方案B：单独生成三视图
-    const views = [
-      { key: 'front', suffix: 'front view, facing camera, full body' },
-      { key: 'side', suffix: 'side view, profile, full body' },
-      { key: 'back', suffix: 'back view, from behind, full body' }
-    ];
-    
-    for (const view of views) {
-      try {
-        console.log(`[ImageService] 回退：单独生成${view.key}视图...`);
-        const viewPrompt = `${visualPrompt}, ${view.suffix}, same character, consistent design, anime style, flat color, clean lines, white background, masterpiece, best quality`;
-        const result = await generateImage({ prompt: viewPrompt });
-        const filename = `char-${characterId}-${view.key}-${variationId || 'base'}-${timestamp}.png`;
-        const localPath = path.join(__dirname, '../uploads/images', filename);
-        const relativePath = '/uploads/images/' + filename;
-        await downloadImage(result.url, localPath);
-        results[view.key] = relativePath;
-      } catch (viewErr) {
-        console.error(`[ImageService] 生成${view.key}视图失败:`, viewErr.message);
-      }
+  // 获取风格后缀
+  const styleSuffix = STYLE_MAP[style] || STYLE_MAP.anime;
+  
+  // 三个视角分别生成
+  const views = [
+    { key: 'front', suffix: 'front view, facing camera, full body' },
+    { key: 'side', suffix: 'side view, profile, full body' },
+    { key: 'back', suffix: 'back view, from behind, full body' }
+  ];
+  
+  for (const view of views) {
+    try {
+      console.log(`[ImageService] 生成${view.key}视图...`);
+      const viewPrompt = `${visualPrompt}, ${view.suffix}, same character, consistent design, consistent clothing, consistent hair color, consistent face, white background, ${styleSuffix}, masterpiece, best quality`;
+      
+      // 用同一种子 + 指定尺寸保证角色一致性
+      const result = await generateImage({ 
+        prompt: viewPrompt, 
+        size: '1024x1024', // 正方形更适合全身角色图
+        seed: consistencySeed // 三张图用同一种子
+      });
+      
+      const filename = `char-${characterId}-${view.key}-${variationId || 'base'}-${timestamp}.png`;
+      const localPath = path.join(__dirname, '../uploads/images', filename);
+      const relativePath = '/uploads/images/' + filename;
+      
+      await downloadImage(result.url, localPath);
+      results[view.key] = relativePath;
+      console.log(`[ImageService] ${view.key}视图生成成功: ${relativePath}`);
+      
+    } catch (viewErr) {
+      console.error(`[ImageService] 生成${view.key}视图失败:`, viewErr.message);
     }
   }
   
-  // 批量更新数据库（保留已成功的部分）
+  // ========== 数据库更新 ==========
   const updateFields = [];
   const updateValues = [];
   let paramIndex = 1;
