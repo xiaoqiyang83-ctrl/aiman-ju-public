@@ -7,7 +7,15 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const { pool } = require('../shared');
-
+const {
+  saveCharacterDNA,
+  loadCharacterDNA,
+  buildStructuredPrompt
+} = require('./character-dna-service');
+const {
+  saveReferenceImage,
+  getReferenceImage
+} = require('./reference-service');
 // 智谱AI配置
 const ZHIPU_API_KEY = process.env.ZHIPU_API_KEY || 'bbeed8803bea453bb6b12198c276087a.EmUkjkS2HbdyoLwg';
 const ZHIPU_BASE_URL = 'https://open.bigmodel.cn/api/paas/v4';
@@ -254,8 +262,26 @@ async function generateCharacterImage(characterId, variationId = null, options =
   // 好处：1. 不依赖sharp库  2. 每张图用同一种子保证角色一致性  3. 生成质量更可控
   const results = {};
   const timestamp = Date.now();
-  const consistencySeed = Math.floor(Math.random() * 1000000); // 同一角色三张图用同一种子
-  
+  //const consistencySeed = Math.floor(Math.random() * 1000000); // 同一角色三张图用同一种子
+  let dna = loadCharacterDNA(characterId);
+
+   if (!dna) {
+    dna = {
+      seed: Math.floor(Math.random() * 1000000),
+      gender: character.identity_anchors?.gender || '',
+      face: character.identity_anchors?.face || '',
+      hair: character.identity_anchors?.hair || '',
+      clothing: character.identity_anchors?.clothing || '',
+      style: style
+     };
+
+     saveCharacterDNA(characterId, dna);
+   }
+
+   const consistencySeed = dna.seed;
+ 
+ 
+ 
   // 获取风格后缀
   const styleSuffix = STYLE_MAP[style] || STYLE_MAP.anime;
   
@@ -269,8 +295,20 @@ async function generateCharacterImage(characterId, variationId = null, options =
   for (const view of views) {
     try {
       console.log(`[ImageService] 生成${view.key}视图...`);
-      const viewPrompt = `${visualPrompt}, ${view.suffix}, same character, consistent design, consistent clothing, consistent hair color, consistent face, white background, ${styleSuffix}, masterpiece, best quality`;
-      
+      //const viewPrompt = `${visualPrompt}, ${view.suffix}, same character, consistent design, consistent clothing, consistent hair color, consistent face, white background, ${styleSuffix}, masterpiece, best quality`;
+      const structuredPrompt = buildStructuredPrompt(
+        dna,
+        `${view.suffix}, white background, full body`
+      );
+
+       const viewPrompt = `
+       ${visualPrompt},
+       ${structuredPrompt},
+       masterpiece,
+       best quality
+       `;
+
+
       // 用同一种子 + 指定尺寸保证角色一致性
       const result = await generateImage({ 
         prompt: viewPrompt, 
