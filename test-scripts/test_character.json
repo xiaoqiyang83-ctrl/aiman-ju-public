@@ -1,0 +1,43 @@
+{
+  "id": "char_001",
+  "name": "林默",
+  "role": "protagonist",
+  "age": 28,
+  "gender": "male",
+  "appearance": {
+    "hair": "黑色短发，凌乱有型",
+    "eyes": "深邃黑色，觉醒时瞳孔变红",
+    "build": "精瘦有力，肌肉线条明显",
+    "clothing": "黑色战术风衣，左肩破损",
+    "distinctive": "左脸有一道从眉骨到下巴的伤疤"
+  },
+  "state": {
+    "emotion": "calm",
+    "health": 85,
+    "energy": 100,
+    "clothes_state": "slightly_damaged",
+    "blackened": false
+  },
+  "powers": [
+    {
+      "name": "时间感知",
+      "level": 1,
+      "description": "感知周围时间流速变化"
+    },
+    {
+      "name": "预知",
+      "level": 0.5,
+      "description": "短暂预知未来3秒"
+    }
+  ],
+  "character_arc": {
+    "start": "冷漠孤僻，不信任任何人",
+    "mid": "开始接受同伴，学会团队作战",
+    "end": "成为领袖，愿意为他人牺牲"
+  },
+  "voice": {
+    "style": "低沉沙哑",
+    "pace": "缓慢",
+    "catchphrases": ["时间不站在你那边", "我看到了结局"]
+  }
+}

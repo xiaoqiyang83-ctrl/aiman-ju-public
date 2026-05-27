@@ -1,0 +1,54 @@
+{
+  "id": "sb_test_001",
+  "title": "末世觉醒测试分镜",
+  "scenes": [
+    {
+      "id": "scene_001",
+      "type": "awakening",
+      "emotion": "oppression",
+      "shots": [
+        {
+          "id": "shot_001",
+          "type": "extreme_wide",
+          "camera": "low_angle",
+          "duration": 4,
+          "emotion": "oppression",
+          "description": "末世废墟，乌云压境",
+          "hook": false
+        },
+        {
+          "id": "shot_002",
+          "type": "closeup",
+          "camera": "dutch_angle",
+          "duration": 2,
+          "emotion": "tension",
+          "description": "男主拳头紧握，青筋暴起",
+          "hook": false
+        },
+        {
+          "id": "shot_003",
+          "type": "extreme_closeup",
+          "camera": "push_in",
+          "duration": 1.5,
+          "emotion": "awakening",
+          "description": "眼睛猛然睁开，瞳孔收缩",
+          "hook": true
+        },
+        {
+          "id": "shot_004",
+          "type": "medium",
+          "camera": "low_angle",
+          "duration": 3,
+          "emotion": "triumph",
+          "description": "男主缓缓站起，周身能量爆发",
+          "hook": true
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "total_duration": 10.5,
+    "hook_count": 2,
+    "emotion_arc": ["oppression", "tension", "awakening", "triumph"]
+  }
+}

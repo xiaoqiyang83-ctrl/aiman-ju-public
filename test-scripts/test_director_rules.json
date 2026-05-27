@@ -1,0 +1,54 @@
+{
+  "version": "1.0",
+  "rules": [
+    {
+      "id": "rule_001",
+      "type": "camera",
+      "condition": {
+        "emotion": "oppression",
+        "scene_type": "awakening"
+      },
+      "action": {
+        "angle": "low_angle",
+        "shot_type": "extreme_wide",
+        "movement": "slow_push"
+      },
+      "priority": 90,
+      "weight": 1.5
+    },
+    {
+      "id": "rule_002",
+      "type": "pacing",
+      "condition": {
+        "emotion": "tension",
+        "build_up": true
+      },
+      "action": {
+        "shot_duration": 1.5,
+        "rhythm": "accelerating"
+      },
+      "priority": 80,
+      "weight": 1.2
+    },
+    {
+      "id": "rule_003",
+      "type": "hook",
+      "condition": {
+        "emotion": "awakening",
+        "moment": "peak"
+      },
+      "action": {
+        "hook_type": "power_up",
+        "duration": 1,
+        "slow_motion": true
+      },
+      "priority": 100,
+      "weight": 2.0
+    }
+  ],
+  "global_settings": {
+    "aspect_ratio": "2.39:1",
+    "default_shot_duration": 3,
+    "hook_frequency": "every_3_shots"
+  }
+}
