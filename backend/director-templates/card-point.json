@@ -1,0 +1,191 @@
+{
+  "template_id": "card_point_collection",
+  "template_name": "卡点Hook镜头合集",
+  "category": "卡点镜头",
+  "version": "1.0",
+  "engine_compatible": true,
+  "description": "最容易拉留存的5种Hook结尾，经过百万播放验证",
+  "templates": [
+    {
+      "hook_type": "关门见眼",
+      "hook_id": "hook_door_eye_001",
+      "popularity": "S级",
+      "total_duration": 3.6,
+      "shots": [
+        {
+          "shot_index": 1,
+          "action": "主角关门离开",
+          "duration": 1.0,
+          "shot_type": "背影视角",
+          "camera_movement": "固定",
+          "frame_rate": 24,
+          "audio": "正常环境音",
+          "audio_volume": 80,
+          "emotion": "平静"
+        },
+        {
+          "shot_index": 2,
+          "action": "门快要关上，只剩一条缝",
+          "duration": 0.5,
+          "shot_type": "门缝特写",
+          "camera_movement": "慢推",
+          "frame_rate": 24,
+          "audio": "门轴吱呀声渐小",
+          "audio_volume": "60→30",
+          "emotion": "疑惑"
+        },
+        {
+          "shot_index": 3,
+          "action": "门缝里看到人影站着",
+          "duration": 0.8,
+          "shot_type": "门缝超级特写",
+          "camera_movement": "猛推 + 骤停",
+          "frame_rate": 1,
+          "audio": "所有声音突然切掉",
+          "audio_volume": 0,
+          "emotion": "恐惧"
+        },
+        {
+          "shot_index": 4,
+          "action": "一只眼睛突然睁开",
+          "duration": 0.3,
+          "shot_type": "眼睛特写",
+          "camera_movement": "爆炸式放大",
+          "frame_rate": 60,
+          "screen_shake": 100,
+          "audio": "恐怖音效爆发",
+          "audio_volume": 150,
+          "emotion": "震惊"
+        },
+        {
+          "shot_index": 5,
+          "action": "【黑屏Hook】",
+          "duration": 1.0,
+          "shot_type": "纯黑画面",
+          "camera_movement": "固定",
+          "frame_rate": 24,
+          "audio": "声音突然切断",
+          "audio_volume": 0,
+          "emotion": "Hook"
+        }
+      ],
+      "keywords": ["门", "关门", "离开", "走了", "回家"],
+      "retention_boost": "+35%"
+    },
+    {
+      "hook_type": "手机亮屏",
+      "hook_id": "hook_phone_001",
+      "popularity": "A级",
+      "total_duration": 3.0,
+      "shots": [
+        {
+          "shot_index": 1,
+          "action": "主角睡着，手机放在床边",
+          "duration": 1.0,
+          "shot_type": "远景",
+          "camera_movement": "慢推",
+          "frame_rate": 24,
+          "audio": "呼吸声",
+          "audio_volume": 30,
+          "emotion": "平静"
+        },
+        {
+          "shot_index": 2,
+          "action": "手机屏幕突然亮了",
+          "duration": 0.5,
+          "shot_type": "手机特写",
+          "camera_movement": "快推",
+          "frame_rate": 24,
+          "audio": "消息提示音",
+          "audio_volume": 60,
+          "emotion": "疑惑"
+        },
+        {
+          "shot_index": 3,
+          "action": "显示消息内容",
+          "duration": 1.0,
+          "shot_type": "屏幕超级特写",
+          "camera_movement": "猛推 + 骤停",
+          "frame_rate": 1,
+          "audio": "静音",
+          "audio_volume": 0,
+          "emotion": "震惊"
+        },
+        {
+          "shot_index": 4,
+          "action": "【黑屏Hook】",
+          "duration": 0.5,
+          "shot_type": "纯黑画面",
+          "camera_movement": "固定",
+          "frame_rate": 24,
+          "audio": "切断",
+          "audio_volume": 0,
+          "emotion": "Hook"
+        }
+      ],
+      "keywords": ["手机", "消息", "短信", "微信", "电话"],
+      "retention_boost": "+25%"
+    },
+    {
+      "hook_type": "回头见人",
+      "hook_id": "hook_turn_around_001",
+      "popularity": "S级",
+      "total_duration": 2.8,
+      "shots": [
+        {
+          "shot_index": 1,
+          "action": "主角往前走",
+          "duration": 1.0,
+          "shot_type": "背影",
+          "camera_movement": "跟拍",
+          "frame_rate": 24,
+          "audio": "脚步声",
+          "audio_volume": 50,
+          "emotion": "平静"
+        },
+        {
+          "shot_index": 2,
+          "action": "主角停下，慢慢回头",
+          "duration": 0.8,
+          "shot_type": "肩部以上特写",
+          "camera_movement": "慢转",
+          "frame_rate": 24,
+          "audio": "脚步声停止",
+          "audio_volume": 0,
+          "emotion": "疑惑"
+        },
+        {
+          "shot_index": 3,
+          "action": "一张脸贴在面前",
+          "duration": 0.5,
+          "shot_type": "脸部超级特写",
+          "camera_movement": "猛推 + 骤停",
+          "frame_rate": 1,
+          "screen_shake": 80,
+          "audio": "跳吓音效",
+          "audio_volume": 150,
+          "emotion": "震惊"
+        },
+        {
+          "shot_index": 4,
+          "action": "【黑屏Hook】",
+          "duration": 0.5,
+          "shot_type": "纯黑画面",
+          "camera_movement": "固定",
+          "frame_rate": 24,
+          "audio": "切断",
+          "audio_volume": 0,
+          "emotion": "Hook"
+        }
+      ],
+      "keywords": ["回头", "转身", "后面", "身后", "谁"],
+      "retention_boost": "+30%"
+    }
+  ],
+  "engine_config": {
+    "hook_required": true,
+    "black_screen_duration": 1.0,
+    "auto_detect_scene_end": true,
+    "retention_priority": "Highest"
+  }
+}

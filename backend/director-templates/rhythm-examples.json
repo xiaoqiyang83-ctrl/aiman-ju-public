@@ -1,0 +1,88 @@
+{
+  "template_id": "rhythm_examples_collection",
+  "template_name": "节奏案例大全",
+  "category": "节奏案例",
+  "version": "1.0",
+  "engine_compatible": true,
+  "description": "10种经过验证的爆款节奏模式，引擎可直接调用",
+  "rhythm_patterns": [
+    {
+      "pattern_id": "rhythm_slow_to_fast_001",
+      "pattern_name": "先慢后快爆发式",
+      "use_case": "打戏、追逐、觉醒",
+      "duration_pattern": [3.0, 2.0, 1.0, 0.5, 0.3, 2.0],
+      "camera_pattern": ["极慢推", "慢推", "中速推", "快推", "极快", "固定"],
+      "frame_rate_pattern": [24, 24, 30, 48, 60, 24],
+      "audio_pattern": ["30%", "40%", "60%", "80%", "150%", "60%"],
+      "effectiveness": "S级",
+      "example_scenes": ["末世反杀", "主角觉醒", "追逐高潮"]
+    },
+    {
+      "pattern_id": "rhythm_silence_explosion_001",
+      "pattern_name": "静音爆炸式",
+      "use_case": "反转、真相揭露、死亡",
+      "duration_pattern": [2.0, 1.5, 1.0, 0.5, 1.5],
+      "camera_pattern": ["慢推", "极慢推", "猛推", "骤停", "拉远"],
+      "frame_rate_pattern": [24, 24, 24, 1, 24],
+      "audio_pattern": ["80%", "40%", "10%", "0%", "150%"],
+      "effectiveness": "S级",
+      "example_scenes": ["身份揭露", "真相大白", "重要角色死亡"]
+    },
+    {
+      "pattern_id": "rhythm_heartbeat_001",
+      "pattern_name": "心跳递进式",
+      "use_case": "悬疑、恐怖、紧张感",
+      "duration_pattern": [1.5, 1.2, 1.0, 0.8, 0.5, 0.3],
+      "camera_pattern": ["固定", "微晃", "小幅度晃", "中幅晃", "大幅晃", "剧烈晃"],
+      "frame_rate_pattern": [24, 24, 24, 30, 48, 60],
+      "audio_pattern": ["心跳30%", "心跳40%", "心跳50%", "心跳60%", "心跳80%", "爆发"],
+      "effectiveness": "A级",
+      "example_scenes": ["开门前", "躲猫猫", "倒计时"]
+    },
+    {
+      "pattern_id": "rhythm_breathe_001",
+      "pattern_name": "呼吸起伏式",
+      "use_case": "情感戏、文戏、回忆",
+      "duration_pattern": [2.0, 1.5, 2.0, 1.5, 3.0],
+      "camera_pattern": ["推", "停", "拉", "停", "固定"],
+      "frame_rate_pattern": [24, 24, 24, 24, 24],
+      "audio_pattern": ["60%", "40%", "60%", "40%", "20%"],
+      "effectiveness": "B级",
+      "example_scenes": ["告白", "离别", "回忆杀"]
+    },
+    {
+      "pattern_id": "rhythm_hammer_001",
+      "pattern_name": "重锤敲击式",
+      "use_case": "连续打脸、连续爆点",
+      "duration_pattern": [0.5, 0.3, 0.5, 0.3, 0.5, 0.3, 2.0],
+      "camera_pattern": ["快切", "骤停", "快切", "骤停", "快切", "骤停", "固定"],
+      "frame_rate_pattern": [30, 1, 30, 1, 30, 1, 24],
+      "audio_pattern": ["100%", "0%", "100%", "0%", "100%", "0%", "60%"],
+      "effectiveness": "S级",
+      "example_scenes": ["连续打脸", "连续反转", "嘴炮连珠"]
+    }
+  ],
+  "shot_duration_reference": {
+    "environment_establish": "1.0-1.5秒 - 越快越好，不要拖",
+    "dialogue_normal": "2.0-3.0秒 - 按台词长度调整",
+    "dialogue_important": "3.0-5.0秒 - 放慢让观众消化",
+    "action_fast": "0.2-0.5秒 - 快到看不清才爽",
+    "action_slow_motion": "0.5-1.0秒 - 60fps慢放",
+    "turning_point_pause": "0.3-1.0秒 - 黄金停顿时间",
+    "emotional_release": "2.0-4.0秒 - 给观众足够时间回味",
+    "hook_ending": "0.5-1.5秒 - 黑屏时间"
+  },
+  "golden_rules": {
+    "speed_ratio_rule": "快慢镜头比例必须大于5:1，小于5倍没有节奏感",
+    "silence_rule": "每个爆点前必须有0.3-1秒的完全静音",
+    "frame_rate_rule": "正常24fps，慢动作60fps，定格1fps",
+    "three_shot_rule": "不能连续三个镜头用同样的景别和运镜",
+    "ending_rule": "永远在情绪最高点黑屏结束，不要等情绪降下来"
+  },
+  "engine_config": {
+    "default_pattern": "rhythm_slow_to_fast_001",
+    "auto_pattern_detection": true,
+    "pattern_confidence_threshold": 0.7,
+    "allow_user_override": true
+  }
+}

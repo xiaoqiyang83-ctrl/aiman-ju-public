@@ -1,0 +1,212 @@
+{
+  "version": "v7.2 爆款漫剧分镜规则库",
+  "description": "真正像爆款漫剧的分镜案例——节奏有起伏、机位有压迫、爆点有停顿、情绪有曲线",
+  "core_principles": {
+    "节奏铁则": "过渡要快、情绪要慢、爆点要停、动作要残影",
+    "机位铁则": "强势用低仰、弱势用高俯、震惊用猛推、对峙用越轴",
+    "爆点公式": "暗示 → 停顿(0.3-1s) → 特写 → 爆发",
+    "情绪曲线": "平静 → 怀疑 → 压迫 → 愤怒 → 爆发 → 余韵"
+  },
+  "samples": [
+    {
+      "case_name": "🚀 案例1：男主觉醒黑化（完整情绪曲线）",
+      "scenario": "男主被打倒在地，众人嘲笑中突然觉醒力量，眼神从绝望变冰冷",
+      "emotion_curve": ["绝望", "平静", "停顿", "冰冷", "威压"],
+      "duration_rhythm": [3, 2, 0.5, 1, 4],
+      "camera_progression": ["高机位俯视", "低机位", "猛推骤停", "眼部特写", "拉镜头震荡"],
+      "shots": [
+        {
+          "shot_index": 1,
+          "action_key": "倒地被踩",
+          "shot_type": "高机位俯拍远景",
+          "camera_movement": "固定",
+          "emotion": "绝望",
+          "duration": 3,
+          "visual_description": "暴雨夜小巷，男主浑身是伤趴在泥泞地面，一只脚狠狠踩在他背上，周围小混混围着嘲笑，路灯昏黄的光把他的影子压缩得很小",
+          "color_palette": {"主色": "冷蓝灰 70%", "辅色": "昏黄 20%", "强调": "血红色 10%"},
+          "director_note": "【压】高机位+远景=主角的渺小无助，把观众情绪压到最低"
+        },
+        {
+          "shot_index": 2,
+          "action_key": "缓缓抬头",
+          "shot_type": "极低机位仰视中景",
+          "camera_movement": "极慢推镜头",
+          "emotion": "平静",
+          "duration": 2,
+          "visual_description": "极低机位贴地面仰拍，男主缓缓抬头，雨水从额头滑落，眼神空洞，正好挡住身后路灯，在脸上形成半明半暗的光影",
+          "color_palette": {"主色": "冷蓝灰 60%", "辅色": "昏黄逆光 30%", "强调": "瞳孔微光 10%"},
+          "director_note": "【抬】低机位+慢推=压迫感开始建立，观众隐约感觉到要出事"
+        },
+        {
+          "shot_index": 3,
+          "action_key": "眼神变化",
+          "shot_type": "眼部超级特写",
+          "camera_movement": "猛推 + 突然静止",
+          "emotion": "停顿",
+          "duration": 0.5,
+          "visual_description": "瞳孔猛地收缩，金色光芒从眼底深处亮起，整个画面突然静止0.5秒，没有任何声音",
+          "color_palette": {"主色": "深邃黑 60%", "辅色": "金色光芒 30%", "强调": "雷光蓝 10%"},
+          "director_note": "🚨🚨🚨【爆点停顿】观众心跳跟着停！这0.5秒价值30%留存！"
+        },
+        {
+          "shot_index": 4,
+          "action_key": "力量觉醒",
+          "shot_type": "低机位近景",
+          "camera_movement": "快速拉镜头 + 画面震荡",
+          "emotion": "爆发",
+          "duration": 0.6,
+          "visual_description": "男主周身爆发出金色气焰，雨水在他身周全被震开，踩他的人被气场直接弹飞，画面有轻微震动效果",
+          "color_palette": {"主色": "金色 70%", "辅色": "冷蓝 20%", "强调": "白色雷光 10%"},
+          "director_note": "【爆】要快！要狠！0.6秒残影效果，观众爽点瞬间释放"
+        },
+        {
+          "shot_index": 5,
+          "action_key": "站起俯视",
+          "shot_type": "低机位仰视中景",
+          "camera_movement": "缓缓拉远 + 固定",
+          "emotion": "威压",
+          "duration": 4,
+          "visual_description": "男主缓缓站起，居高临下地看着地上的小混混，眼神像在看死人，金色气焰在他周身缓缓流动",
+          "color_palette": {"主色": "金色 60%", "辅色": "冷蓝 30%", "强调": "眼神光 10%"},
+          "director_note": "【收】慢收！4秒让观众的爽感充分回味，不要急着切"
+        }
+      ]
+    },
+    {
+      "case_name": "🔥 案例2：对峙反转（爆点停顿教科书）",
+      "scenario": "反派以为赢了，男主说出真相，反派表情从得意到震惊到崩溃",
+      "emotion_curve": ["得意", "疑惑", "震惊", "停顿", "崩溃"],
+      "duration_rhythm": [2, 2, 0.3, 0.5, 1],
+      "camera_progression": ["固定", "慢推", "猛推", "骤停", "跟拍"],
+      "shots": [
+        {
+          "shot_index": 1,
+          "action_key": "反派得意",
+          "shot_type": "平视中景",
+          "camera_movement": "缓慢横移",
+          "emotion": "得意",
+          "duration": 2,
+          "visual_description": "办公室，反派坐在老板椅上转过来，背对着落地窗外的城市夜景，手里端着红酒杯，嘴角挂着胜券在握的笑",
+          "color_palette": {"主色": "深蓝黑 70%", "辅色": "霓虹紫 20%", "强调": "红酒红 10%"},
+          "director_note": "【平】建立反派的掌控感，让观众觉得他真的赢了"
+        },
+        {
+          "shot_index": 2,
+          "action_key": "男主开口",
+          "shot_type": "对切近景",
+          "camera_movement": "缓慢推镜头",
+          "emotion": "平静",
+          "duration": 2,
+          "visual_description": "男主坐在对面沙发上，身体微微前倾，双手交叉，脸上没有任何表情，灯光在他脸上投下深深的阴影",
+          "color_palette": {"主色": "深蓝黑 70%", "辅色": "冷白 20%", "强调": "瞳孔反光 10%"},
+          "director_note": "【压】慢推=压迫感累积，观众开始意识到不对劲"
+        },
+        {
+          "shot_index": 3,
+          "action_key": "说出破绽",
+          "shot_type": "男主嘴唇特写",
+          "camera_movement": "极慢推",
+          "emotion": "嘲讽",
+          "duration": 1.5,
+          "visual_description": "男主嘴角微微上扬，露出一抹嘲讽的笑，一字一句说出反派的致命破绽，每个字都像一把刀",
+          "color_palette": {"主色": "深蓝黑 60%", "辅色": "冷白 30%", "强调": "嘴唇动作 10%"},
+          "director_note": "【暗示】观众心里'哦？'一声，期待感拉满"
+        },
+        {
+          "shot_index": 4,
+          "action_key": "反派愣住",
+          "shot_type": "反派脸部超级特写",
+          "camera_movement": "猛推 + 突然静止",
+          "emotion": "震惊",
+          "duration": 0.5,
+          "visual_description": "反派的笑僵在脸上，瞳孔猛地放大，红酒杯停在半空，整个画面完全静止，没有任何声音",
+          "color_palette": {"主色": "惨白 50%", "辅色": "深蓝黑 40%", "强调": "瞳孔收缩 10%"},
+          "director_note": "🚨🚨🚨【爆点停顿】这0.5秒是整个漫剧最抓人的瞬间！"
+        },
+        {
+          "shot_index": 5,
+          "action_key": "酒杯落地",
+          "shot_type": "手部跟拍特写",
+          "camera_movement": "快速跟拍下坠",
+          "emotion": "崩溃",
+          "duration": 0.8,
+          "visual_description": "红酒杯从手中滑落，深红的酒液在空中划出弧线，杯子在地毯上滚了一圈，酒渍像血一样漫开",
+          "color_palette": {"主色": "深红 60%", "辅色": "深蓝黑 30%", "强调": "玻璃反光 10%"},
+          "director_note": "【收】用物品反应代替人脸，比拍崩溃表情更有高级感"
+        }
+      ]
+    },
+    {
+      "case_name": "⚡ 案例3：复仇反击（节奏教科书）",
+      "scenario": "女主被扇耳光，停顿0.5秒，反手十倍打回去，完美诠释：压→停→爆→收",
+      "emotion_curve": ["屈辱", "停顿", "冰冷", "爆发", "余韵"],
+      "duration_rhythm": [0.5, 1, 0.3, 0.6, 2],
+      "camera_progression": ["随动作甩动", "慢转+骤停", "低机位", "快跟", "俯视固定"],
+      "shots": [
+        {
+          "shot_index": 1,
+          "action_key": "被扇耳光",
+          "shot_type": "侧面中景",
+          "camera_movement": "随动作快速甩动",
+          "emotion": "屈辱",
+          "duration": 0.5,
+          "visual_description": "女配的手狠狠扇在女主脸上，女主的头被打得猛地偏向一边，头发散乱，脸上立刻浮起红红的掌印",
+          "color_palette": {"主色": "暖黄 70%", "辅色": "掌印红 20%", "强调": "眼神恨意 10%"},
+          "director_note": "【压】要快！要狠！0.5秒就够，把观众的愤怒值拉满"
+        },
+        {
+          "shot_index": 2,
+          "action_key": "缓缓转头",
+          "shot_type": "脸部特写",
+          "camera_movement": "极慢跟转 + 突然静止",
+          "emotion": "停顿",
+          "duration": 1,
+          "visual_description": "女主缓缓转过头，头发还在飘动，眼神里没有眼泪，只有冰冷的杀意，整个画面突然静止0.5秒",
+          "color_palette": {"主色": "暖黄 60%", "辅色": "冷白眼神 30%", "强调": "嘴角笑意 10%"},
+          "director_note": "🚨🚨🚨【爆点停顿】这1秒观众在心里狂喊：打回去！打回去！"
+        },
+        {
+          "shot_index": 3,
+          "action_key": "抬手",
+          "shot_type": "手部特写",
+          "camera_movement": "极快跟拍",
+          "emotion": "冰冷",
+          "duration": 0.3,
+          "visual_description": "女主的手以肉眼难辨的速度抬起，快到留下三道残影",
+          "color_palette": {"主色": "暖黄 70%", "辅色": "残影 20%", "强调": "力量感 10%"},
+          "director_note": "【爆前】要快！残影效果！观众还没反应过来就已经打完了"
+        },
+        {
+          "shot_index": 4,
+          "action_key": "反手扇回",
+          "shot_type": "低机位动作特写",
+          "camera_movement": "快速跟拍 + 画面震动",
+          "emotion": "爆发",
+          "duration": 0.6,
+          "visual_description": "女主的手狠狠扇在女配脸上，女配整个人被扇得离地转了一圈，画面有轻微震动效果",
+          "color_palette": {"主色": "暖黄 70%", "辅色": "动作残影 20%", "强调": "力量感 10%"},
+          "director_note": "【爆】要狠！要响！0.6秒解决战斗！爽点瞬间释放"
+        },
+        {
+          "shot_index": 5,
+          "action_key": "俯视女配",
+          "shot_type": "高机位俯视特写",
+          "camera_movement": "拉远 + 固定",
+          "emotion": "威压",
+          "duration": 2,
+          "visual_description": "女主站在女配面前，居高临下地看着她捂着脸倒在地上，眼神像在看一只蚂蚁",
+          "color_palette": {"主色": "暖黄 60%", "辅色": "阴影 30%", "强调": "眼神光 10%"},
+          "director_note": "【收】2秒慢收，让观众的爽感充分释放，不要急着切下一个场景"
+        }
+      ]
+    }
+  ],
+  "爆款节奏对照表": {
+    "过渡镜头": "1-1.5秒 - 快到观众来不及跳过",
+    "对话镜头": "2-3秒 - 正常语速不拖沓",
+    "情绪镜头": "3-5秒 - 慢到观众屏住呼吸",
+    "爆点停顿": "0.3-1秒 - 停到观众心跳骤停",
+    "动作镜头": "0.3-0.8秒 - 快到观众看不清动作",
+    "余韵镜头": "1.5-2秒 - 让爽感充分回味"
+  }
+}
