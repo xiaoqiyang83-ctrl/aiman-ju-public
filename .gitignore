@@ -9,3 +9,10 @@ backend/uploads/
 
 .env
 backend/.env
+
+# 敏感配置（公开仓排除）
+backend/config/
+backend/data/
+backend/uploads/
+.env
+backend/.env
