@@ -1,0 +1,15 @@
+{
+  "rhythm_types": [
+    "fast_cut",
+    "slow_push",
+    "pause",
+    "explosion",
+    "hook_hold"
+  ],
+
+  "priority_mapping": {
+    "S": "slow_push",
+    "A": "medium",
+    "B": "fast_cut"
+  }
+}

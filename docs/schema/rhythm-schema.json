@@ -1,0 +1,19 @@
+{
+  "emotion_types": [
+    "calm",
+    "suspicion",
+    "fear",
+    "anger",
+    "rage",
+    "despair",
+    "awakening",
+    "oppression",
+    "relief"
+  ],
+
+  "transition_rules": {
+    "calm": ["suspicion", "fear"],
+    "fear": ["anger", "despair"],
+    "anger": ["rage", "awakening"]
+  }
+}
