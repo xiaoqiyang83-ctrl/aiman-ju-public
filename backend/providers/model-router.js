@@ -17,11 +17,7 @@ class ModelRouter {
         this.providers[name] = provider;
     }
 
-    /**
-     * 根据任务类型路由
-     */
     routeForTask(taskType, options) {
-        // 根据任务类型选择最合适的模型
         switch (taskType) {
             case 'character':
                 return this.providers['flux'] || this.providers[this.defaultProvider];

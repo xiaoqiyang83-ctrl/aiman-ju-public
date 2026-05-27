@@ -14,16 +14,11 @@ class BeatEngine {
     }
 
     calculateBeatPattern(emotion, intensity) {
-        // 根据情绪和强度计算节拍模式
         const pattern = this.beatPatterns[emotion] || this.beatPatterns.fast_cut;
-        return {
-            ...pattern,
-            intensity: intensity
-        };
+        return { ...pattern, intensity };
     }
 
     generateShotDuration(pattern) {
-        // 生成镜头时长
         return pattern.duration * (1 + Math.random() * 0.2);
     }
 }
