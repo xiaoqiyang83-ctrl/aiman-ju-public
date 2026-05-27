@@ -1,0 +1,46 @@
+{
+  "shot_type": "freeze-frame",
+  "name": "静止停顿",
+  "category": "镜头语言",
+  "version": "1.0",
+  "usage": [
+    "爆点前0.5秒",
+    "反转揭晓瞬间",
+    "死亡/重伤瞬间",
+    "名场面定格",
+    "集尾Hook"
+  ],
+  "emotion_effect": [
+    "时间停止感",
+    "心跳骤停感",
+    "记忆点强化",
+    "爽点放大"
+  ],
+  "camera_rules": [
+    "状态：画面完全静止，无任何运动",
+    "景别：优先特写/近景",
+    "可加特效：轻微震动/闪光/画面边缘收缩",
+    "画面清晰度：瞬间提高对比度和饱和度",
+    "结束方式：切下一镜头/黑屏/画面破碎效果"
+  ],
+  "duration_rules": {
+    "micro_pause": "0.1-0.3秒 - 极短停顿，几乎察觉不到但就是爽",
+    "normal_pause": "0.3-0.7秒 - 标准爆点停顿，最常用",
+    "long_pause": "0.7-1.5秒 - 强调重要性/名场面",
+    "hook_pause": "1.0-2.0秒 - 集尾Hook，停完直接黑屏"
+  },
+  "duration_range": {
+    "min_seconds": 0.1,
+    "max_seconds": 2.0,
+    "typical": 0.5
+  },
+  "frame_rate_hint": "1fps定格",
+  "audio_hint": "完全静音！0音量。这是铁则。",
+  "priority": "S",
+  "can_combine_with": [
+    "close-up",
+    "push-in（推完骤停）",
+    "slow-motion（慢完骤停）"
+  ],
+  "director_note": "🔥 爆款核心！0.5秒的完全静止+静音，价值30%留存。没有停顿的爆点不是真爆点。"
+}

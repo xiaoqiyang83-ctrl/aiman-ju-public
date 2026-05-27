@@ -1,0 +1,69 @@
+{
+  "shot_type": "emotional-close-up",
+  "name": "情绪特写",
+  "category": "镜头语言",
+  "version": "1.0",
+  "usage": [
+    "流泪/哭泣",
+    "愤怒到咬牙",
+    "震惊瞳孔放大",
+    "冷笑/嘲讽",
+    "决心/坚定眼神"
+  ],
+  "emotion_effect": [
+    "强烈代入感",
+    "情绪共鸣",
+    "共情",
+    "记忆点"
+  ],
+  "camera_rules": {
+    "eyes": {
+      "description": "眼部超级特写",
+      "frame": "只拍眼睛和眉毛",
+      "focus": "瞳孔必须锐利",
+      "use_when": ["流泪", "震惊", "决心", "杀意"]
+    },
+    "mouth": {
+      "description": "嘴部特写",
+      "frame": "嘴唇和下巴",
+      "details": "咬牙/颤抖/冷笑",
+      "use_when": ["愤怒", "嘲讽", "痛苦"]
+    },
+    "hand": {
+      "description": "手部特写",
+      "frame": "拳头/指尖/颤抖的手",
+      "details": "指节发白/指甲掐掌心",
+      "use_when": ["压抑愤怒", "紧张", "痛苦"]
+    }
+  },
+  "specific_emotion_rules": {
+    "sadness": {
+      "lighting": "柔光，侧光打在眼泪上",
+      "focus": "眼泪滑落轨迹要清晰",
+      "slow_motion": "必须60fps慢放"
+    },
+    "anger": {
+      "lighting": "硬光，高对比度",
+      "details": "咬肌、青筋、发红的眼睛",
+      "camera": "轻微手持抖动"
+    },
+    "shock": {
+      "lighting": "逆光/顶光",
+      "details": "瞳孔放大的瞬间",
+      "effect": "1fps定格0.3秒"
+    }
+  },
+  "duration_range": {
+    "min_seconds": 0.5,
+    "max_seconds": 3.0,
+    "typical": 1.5
+  },
+  "frame_rate_hint": "60fps慢放，关键瞬间1fps定格",
+  "audio_hint": "环境音减弱，只留呼吸声/心跳声",
+  "priority": "A",
+  "can_combine_with": [
+    "slow-motion",
+    "freeze-frame"
+  ],
+  "director_note": "情绪特写是观众和角色的连接点。观众不会记得角色说了什么，但会记得那个流泪的眼神。"
+}

@@ -1,0 +1,40 @@
+{
+  "shot_type": "close-up",
+  "name": "特写镜头",
+  "category": "镜头语言",
+  "version": "1.0",
+  "usage": [
+    "爆点前停顿",
+    "情绪转折点",
+    "人物内心戏",
+    "重要台词说出前",
+    "真相揭露瞬间"
+  ],
+  "emotion_effect": [
+    "聚焦感",
+    "紧张感",
+    "代入感",
+    "情绪放大"
+  ],
+  "camera_rules": [
+    "景别：肩部以上，只拍脸部",
+    "眼睛位置：画面黄金分割点（上1/3处）",
+    "背景：完全虚化（景深极浅）",
+    "打光：侧光/逆光，突出轮廓",
+    "画面稳定：无抖动，除非特意强调"
+  ],
+  "duration_range": {
+    "min_seconds": 0.3,
+    "max_seconds": 3.0,
+    "typical": 1.0
+  },
+  "frame_rate_hint": "爆点前用1fps定格，情绪推进用24fps",
+  "audio_hint": "环境音静音，只留心跳声/呼吸声",
+  "priority": "S",
+  "can_combine_with": [
+    "push-in",
+    "freeze-frame",
+    "slow-motion"
+  ],
+  "director_note": "特写是情绪放大器，用在刀刃上。连续3个特写以上会疲劳。"
+}

@@ -1,0 +1,63 @@
+{
+  "shot_type": "cadence-shot",
+  "name": "卡点镜头",
+  "category": "镜头语言",
+  "version": "1.0",
+  "usage": [
+    "BGM鼓点卡点",
+    "连续爆点快切",
+    "预告/片头",
+    "战斗快剪",
+    "回忆杀快闪"
+  ],
+  "emotion_effect": [
+    "节奏感",
+    "爽感叠加",
+    "信息轰炸",
+    "燃起来了"
+  ],
+  "camera_rules": {
+    "rhythm_pattern": "每个镜头卡一个鼓点",
+    "shot_duration": "与BPM同步",
+    "transition": "硬切，无转场",
+    "angle_variation": "每个镜头角度必须不同"
+  },
+  "bpm_mapping": {
+    "slow_80bpm": "每个镜头0.75秒，5个镜头=4秒",
+    "normal_120bpm": "每个镜头0.5秒，8个镜头=4秒",
+    "fast_160bpm": "每个镜头0.375秒，11个镜头=4秒",
+    "very_fast_180bpm": "每个镜头0.33秒，12个镜头=4秒"
+  },
+  "cadence_patterns": {
+    "build_up": [
+      "2.0秒慢镜头",
+      "1.0秒中景",
+      "0.5秒近景",
+      "0.3秒特写",
+      "0.2秒特写",
+      "爆点"
+    ],
+    "equal": "全部0.5秒快切，8-12个镜头一组",
+    "slow_to_fast": "从1秒逐渐加速到0.2秒，最后爆点"
+  },
+  "cut_rules": [
+    "绝对不能连续3个同角度镜头",
+    "景别要有变化：远→中→近→特循环",
+    "正反打交替：主角→反派→主角→反派",
+    "最后一个镜头必须停在最爽的帧"
+  ],
+  "duration_range": {
+    "min_per_shot": 0.2,
+    "max_per_shot": 2.0,
+    "typical_sequence_duration": 4.0
+  },
+  "frame_rate_hint": "24fps正常，个别关键镜头60fps慢放",
+  "audio_hint": "完全卡鼓点，每个切镜在鼓点上",
+  "priority": "A",
+  "can_combine_with": [
+    "close-up",
+    "slow-motion",
+    "freeze-frame（最后一镜停顿）"
+  ],
+  "director_note": "卡点不是把镜头剪碎就完了，是观众的心跳和镜头一起蹦。卡上了就是神，卡不上就是乱剪。"
+}

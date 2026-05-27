@@ -1,0 +1,39 @@
+{
+  "shot_type": "low-angle",
+  "name": "低机位仰视",
+  "category": "镜头语言",
+  "version": "1.0",
+  "usage": [
+    "主角觉醒时刻",
+    "Boss首次登场",
+    "反杀成功瞬间",
+    "权力/力量展示",
+    "反派压迫场景"
+  ],
+  "emotion_effect": [
+    "力量感",
+    "压迫感",
+    "敬畏感",
+    "不可战胜感"
+  ],
+  "camera_rules": [
+    "镜头角度：从下往上仰拍",
+    "人物占画面比例：70%-85%",
+    "地平线位置：画面上1/3处或更高",
+    "背景简化：天空/纯色/暗背景",
+    "人物脚部位置：画面底部边缘"
+  ],
+  "duration_range": {
+    "min_seconds": 1.5,
+    "max_seconds": 4.0,
+    "typical": 2.5
+  },
+  "frame_rate_hint": "正常24fps，爆发瞬间可60fps慢放",
+  "audio_hint": "低沉BGM加重，增加混响",
+  "priority": "A",
+  "can_combine_with": [
+    "push-in",
+    "freeze-frame"
+  ],
+  "director_note": "漫剧/短剧最常用的爽点镜头，没有低机位的觉醒不叫真觉醒。"
+}

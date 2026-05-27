@@ -1,0 +1,46 @@
+{
+  "shot_type": "push-in",
+  "name": "推镜",
+  "category": "镜头语言",
+  "version": "1.0",
+  "usage": [
+    "情绪递进过程",
+    "悬念积累",
+    "重要信息揭示",
+    "从环境到人物的聚焦",
+    "内心戏引入"
+  ],
+  "emotion_effect": [
+    "递进感",
+    "压迫感增强",
+    "聚焦感",
+    "悬念加深"
+  ],
+  "camera_rules": [
+    "推镜速度：极慢（情绪推进）→ 中速（正常推进）→ 极快（爆发瞬间）",
+    "起始景别：全景/中景",
+    "结束景别：近景/特写",
+    "路径：直线推进，无晃动",
+    "结束帧：精确停在脸部/眼睛"
+  ],
+  "speed_levels": {
+    "very_slow": "情绪递进，0.5x速度，3秒以上",
+    "normal": "正常推进，1x速度，1-2秒",
+    "fast": "快速推镜，2x速度，0.5-1秒",
+    "very_fast": "猛推，4x+速度，0.2-0.5秒（爆点前）"
+  },
+  "duration_range": {
+    "min_seconds": 0.2,
+    "max_seconds": 4.0,
+    "typical": 1.5
+  },
+  "frame_rate_hint": "全程24fps，爆点前猛推可结尾处1fps定格",
+  "audio_hint": "BGM随推镜进度逐渐升高音量",
+  "priority": "A",
+  "can_combine_with": [
+    "close-up",
+    "freeze-frame",
+    "low-angle"
+  ],
+  "director_note": "推镜是漫剧最常用的情绪推进手段。不是为了推而推，是观众心里的'想知道'推着镜头走。"
+}
