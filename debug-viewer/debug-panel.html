@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Director Engine Debug Viewer</title>
+  <style>
+    body { font-family: monospace; background: #1a1a2e; color: #eee; margin: 0; padding: 20px; }
+    .panel { border: 1px solid #16213e; background: #0f3460; padding: 15px; margin: 10px 0; border-radius: 8px; }
+    .title { font-size: 18px; font-weight: bold; color: #e94560; margin-bottom: 10px; }
+    .metric { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid #16213e; }
+    .good { color: #4ade80; }
+    .warn { color: #fbbf24; }
+    .bad { color: #ef4444; }
+    .timeline { height: 60px; background: #16213e; position: relative; margin: 10px 0; }
+    .beat { position: absolute; width: 4px; height: 100%; background: #e94560; top: 0; }
+    .hook { position: absolute; width: 8px; height: 100%; background: #4ade80; top: 0; }
+  </style>
+</head>
+<body>
+  <div class="panel">
+    <div class="title">🎬 Director Engine Status</div>
+    <div class="metric"><span>System Status:</span><span class="good">ONLINE</span></div>
+    <div class="metric"><span>Scene Processed:</span><span>0</span></div>
+    <div class="metric"><span>Total Shots:</span><span>0</span></div>
+    <div class="metric"><span>Avg Shot Duration:</span><span>3.2s</span></div>
+  </div>
+  
+  <div class="panel">
+    <div class="title">📊 Emotion Arc</div>
+    <div class="timeline"></div>
+  </div>
+  
+  <div class="panel">
+    <div class="title">🎯 Beat Analysis</div>
+    <div class="timeline"></div>
+  </div>
+  
+  <div class="panel">
+    <div class="title">⚡ Hook Detection</div>
+    <div class="metric"><span>Hook Count:</span><span>0</span></div>
+    <div class="metric"><span>Hook Density:</span><span>0 / min</span></div>
+  </div>
+</body>
+</html>

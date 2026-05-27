@@ -1,0 +1,16 @@
+{
+  "rule_id": "string",
+  "rule_type": "camera|lighting|composition|pacing|emotion",
+  "condition": {
+    "emotion": "string",
+    "scene_type": "string",
+    "shot_count": "number"
+  },
+  "action": {
+    "camera_angle": "string",
+    "shot_type": "string",
+    "duration": "number"
+  },
+  "priority": "number",
+  "weight": "number"
+}

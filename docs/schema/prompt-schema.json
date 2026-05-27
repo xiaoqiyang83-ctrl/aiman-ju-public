@@ -1,0 +1,16 @@
+{
+  "prompt_id": "string",
+  "template_type": "character|scene|action|environment",
+  "sections": [
+    {
+      "name": "string",
+      "weight": "number",
+      "content": "string"
+    }
+  ],
+  "negative_prompt": "string",
+  "style_modifiers": ["string"],
+  "quality_tags": ["string"],
+  "aspect_ratio": "string",
+  "version": "string"
+}
